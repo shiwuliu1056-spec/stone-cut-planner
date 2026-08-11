@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Todo · 多模型环境测试</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header">
+        <h1>Todo</h1>
+        <p class="app__subtitle">多模型 AI 编程环境 · 测试项目</p>
+      </header>
+
+      <form id="add-form" class="add-form" autocomplete="off">
+        <label class="visually-hidden" for="title-input">新任务</label>
+        <input
+          id="title-input"
+          class="add-form__input"
+          type="text"
+          placeholder="输入新任务，回车添加"
+          maxlength="100"
+          required
+        />
+        <button class="add-form__button" type="submit">添加</button>
+      </form>
+
+      <p id="form-error" class="form-error" hidden></p>
+
+      <section id="list" class="list" aria-live="polite"></section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

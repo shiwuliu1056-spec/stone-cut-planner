@@ -1,0 +1,14 @@
+{
+  "name": "ai-coding-env-test",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal test project for the multi-model coding environment",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test server/"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
