@@ -1,0 +1,18 @@
+{
+  "name": "stone-cut-planner-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "石材下料工具后端服务",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "docx": "9.6.1",
+    "exceljs": "4.4.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
