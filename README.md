@@ -4,7 +4,13 @@
 
 ## 项目截图
 
-截图将在项目完善后补充。
+<p align="center">
+  <img src="docs/screenshots/word-export.png" alt="Word 排版图导出" width="32%" />
+  <img src="docs/screenshots/excel-export.png" alt="Excel 下料尺寸表导出" width="32%" />
+  <img src="docs/screenshots/app-full-page.jpg" alt="应用完整页面" width="32%" />
+</p>
+
+点击图片可以查看原始尺寸。
 
 ## 功能
 
