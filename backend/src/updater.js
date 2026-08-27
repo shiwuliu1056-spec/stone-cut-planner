@@ -11,7 +11,7 @@ const childProcess = require('child_process');
 // 发布新版本时，把服务器上的 update-manifest.json 地址填进这里；
 // 也可以在应用同目录放一个 update-config.json（内容 {"url":"https://..."}），
 // 改更新地址时不用重新打包。推荐用 update-config.json。
-const DEFAULT_UPDATE_URL = '';
+const DEFAULT_UPDATE_URL = 'https://raw.githubusercontent.com/shiwuliu1056-spec/stone-cut-planner/main/update-manifest.json';
 
 let APP_VERSION = '1.0.0';
 try { APP_VERSION = require('../package.json').version; } catch (_) { /* ignore */ }
