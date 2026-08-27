@@ -17,6 +17,7 @@
 - 配置多种大板尺寸和可用数量上限
 - 手动维护小料尺寸与数量
 - 从 Excel 导入小料清单
+- 拍照识别手写或打印的“长度 × 宽度 = 数量”记录（支持 mm/cm 单位选择）
 - 自动排版并支持零件旋转
 - 展示母板数量、余料块数和余料面积
 - 使用 Canvas 绘制排版图和切割线
@@ -81,6 +82,22 @@ npm run build
 npm run start
 ```
 
+## Win8 兼容绿色包
+
+旧版在 Win7/Win8 上采用「Node 14.17.6 + 原生 HTTP 静态服务」方式运行。新版本保留普通 Next.js 开发/生产流程，同时提供同样的兼容路径：构建阶段使用现代 Node 生成 `frontend/out`，Win8 运行时不加载 Next.js，只运行原生服务和现有后端依赖。
+
+```bash
+npm run build:win8
+WIN8_NODE=/path/to/node.exe \
+WIN8_BAT=/path/to/启动工具_最新版.bat \
+WIN8_ICON=/path/to/app.ico \
+npm run package:win8
+```
+
+`WIN8_BAT`、`WIN8_ICON` 和 `WIN8_NODE` 都是从旧绿色包复制的外部文件，打包脚本不会修改或重新生成它们。生成的 `dist/win8/` 目录可直接交给 Win8 测试机；旧 BAT 仍使用 `node.exe server.js` 启动。普通 `npm run dev`、`npm run start:prod` 和依赖版本不变。
+
+Win8 绿色版的更新只替换 ZIP：在绿色包根目录放置 `update-config.json`，内容为 `{"url":"https://你的地址/update-manifest.json"}`。清单中的 `url` 应指向新版绿色 ZIP，并提供 `version`、`sha256` 和可选的 `notes`；点击页脚“检查更新”后，程序会下载、校验、关闭、替换并重新启动。
+
 ## 测试与检查
 
 运行完整检查：
@@ -102,6 +119,8 @@ npm run test:backend
 npm run lint:frontend
 npm run build:frontend
 ```
+
+图片识别默认使用联网视觉模型。启动时会自动读取本机 `~/.config/agent-vision-toolkit/env` 中的 Agent Vision Toolkit 配置；也可以运行 `npm run copy:vision-config` 将其复制为本项目的本地配置。真实 Key 文件已被 Git 忽略，不会进入仓库。接口不可用时仍可保留本地 OCR 作为兜底。
 
 ## Excel 导入格式
 

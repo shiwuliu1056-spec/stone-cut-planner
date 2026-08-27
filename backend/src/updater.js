@@ -6,6 +6,7 @@ const os = require('os');
 const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
+const childProcess = require('child_process');
 
 // 发布新版本时，把服务器上的 update-manifest.json 地址填进这里；
 // 也可以在应用同目录放一个 update-config.json（内容 {"url":"https://..."}），
@@ -22,11 +23,12 @@ const state = {
 };
 
 function isPackaged() {
-  return Boolean(process.pkg);
+  return Boolean(process.pkg || process.env.STONE_WIN8_PACKAGE === '1');
 }
 
 function appDir() {
-  return isPackaged() ? path.dirname(process.execPath) : path.join(__dirname, '..');
+  if (process.pkg || process.env.STONE_WIN8_PACKAGE === '1') return path.resolve(__dirname, '..', '..');
+  return path.join(__dirname, '..');
 }
 
 function resolveConfigPath() {
@@ -189,12 +191,13 @@ async function startApply(onApplied) {
   state.percent = 0;
   state.error = '';
 
-  const tmpExe = path.join(os.tmpdir(), `stone-planner-update-${manifest.version}-${process.pid}.exe`);
+  const extension = process.env.STONE_WIN8_PACKAGE === '1' ? 'zip' : 'exe';
+  const tmpUpdate = path.join(os.tmpdir(), `stone-planner-update-${manifest.version}-${process.pid}.${extension}`);
   try {
-    const actualSha256 = await downloadToFile(manifest.url, tmpExe, (percent) => { state.percent = percent; });
+    const actualSha256 = await downloadToFile(manifest.url, tmpUpdate, (percent) => { state.percent = percent; });
     const expectedSha256 = sanitizeSha256(manifest.sha256);
     if (expectedSha256 && actualSha256 !== expectedSha256) {
-      fs.unlink(tmpExe, () => {});
+      fs.unlink(tmpUpdate, () => {});
       throw new Error('下载文件校验失败，已取消更新');
     }
   } catch (error) {
@@ -205,6 +208,13 @@ async function startApply(onApplied) {
 
   state.phase = 'applying';
   state.percent = 100;
+  if (process.env.STONE_WIN8_PACKAGE === '1') {
+    const helper = path.join(appDir(), 'backend', 'update-helper.js');
+    const worker = childProcess.spawn(process.execPath, [helper, '--apply-zip', tmpUpdate, appDir()], {
+      cwd: appDir(), detached: true, stdio: 'ignore',
+    });
+    worker.unref();
+  }
   setTimeout(() => {
     try { onApplied && onApplied(); } catch (_) { /* ignore */ }
   }, 800);

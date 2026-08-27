@@ -20,6 +20,127 @@ function offcutColors(offcut) {
   return offcut.reusable ? OFFCUT_COLORS.reusable : OFFCUT_COLORS.small;
 }
 
+function groupByDimensions(items) {
+  // 下料和余料共用此规则：按单片面积（长×宽）从大到小排序，数量不参与排序。
+  const groups = new Map();
+  items.forEach((item) => {
+    const rawW = Math.round(Number(item.w) || 0);
+    const rawH = Math.round(Number(item.h) || 0);
+    // 旋转只改变摆放方向，同一规格仍归为一组，统一按长边×短边显示。
+    const w = Math.max(rawW, rawH);
+    const h = Math.min(rawW, rawH);
+    const key = `${w}×${h}`;
+    if (!groups.has(key)) groups.set(key, { w, h, count: 0, items: [] });
+    const group = groups.get(key);
+    group.count += 1;
+    group.items.push(item);
+  });
+  return [...groups.values()].sort((a, b) => {
+    const areaDiff = b.w * b.h - a.w * a.h;
+    return areaDiff || b.w - a.w || b.h - a.h;
+  });
+}
+
+function compactIds(items, { placement = false } = {}) {
+  const ids = [...new Set(items.map((item) => {
+    const raw = placement ? (item.id || item.instance) : item.id;
+    return String(raw || '').replace(/-/g, '');
+  }).filter(Boolean))];
+  if (ids.length <= 1) return ids[0] || '';
+
+  const numbered = ids.map((id) => id.match(/^(.*?)(\d+)$/));
+  if (numbered.every(Boolean) && numbered.every((m) => m[1] === numbered[0][1])) {
+    const values = numbered.map((m) => Number(m[2])).sort((a, b) => a - b);
+    const contiguous = values.every((value, index) => index === 0 || value === values[index - 1] + 1);
+    if (contiguous) {
+      const width = numbered[0][2].length;
+      const first = String(values[0]).padStart(width, '0');
+      const last = String(values[values.length - 1]).padStart(width, '0');
+      return `${numbered[0][1]}${first}–${numbered[0][1]}${last}`;
+    }
+  }
+  return ids.length > 4 ? `${ids.slice(0, 3).join('、')}等${ids.length}项` : ids.join('、');
+}
+
+function groupLabel(group, { placement = false } = {}) {
+  const id = compactIds(group.items, { placement });
+  return `${id ? `${id}  ` : ''}${group.w}×${group.h} = ${group.count}`;
+}
+
+function panelListMetrics(ctx, items, label, listWidth, listHeight) {
+  const baseFontSize = 52;
+  ctx.font = `600 ${baseFontSize}px sans-serif`;
+  const maxLabelWidth = items.reduce((max, item, index) => (
+    Math.max(max, ctx.measureText(label(item, index)).width)
+  ), 0);
+  const rowsPerColumn = Math.max(1, Math.floor(listHeight / 64));
+  const columns = Math.max(1, Math.ceil(items.length / rowsPerColumn));
+  const rows = Math.max(1, Math.ceil(items.length / columns));
+  const colW = listWidth / columns;
+  const lineHeight = Math.max(32, Math.min(72, listHeight / rows));
+  const widthFit = maxLabelWidth > 0 ? Math.min(1, colW / maxLabelWidth) : 1;
+  const fontSize = Math.max(16, Math.min(baseFontSize, lineHeight * 0.72, baseFontSize * widthFit));
+  return { columns, rows, colW, lineHeight, fontSize };
+}
+
+function drawPanelList(ctx, { title, items, label, getColor, panelX, panelY, panelW, sectionH, titleFont }) {
+  ctx.fillStyle = '#29483f';
+  ctx.font = `700 ${titleFont}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(title, panelX + 28, panelY + 62);
+
+  // 标题与第一行内容留出更清晰的呼吸空间；上下框高度保持不变。
+  const listTop = panelY + 124;
+  const listHeight = Math.max(20, sectionH - 144);
+  const metrics = panelListMetrics(ctx, items, label, panelW - 56, listHeight);
+  items.forEach((item, index) => {
+    const col = Math.floor(index / metrics.rows);
+    const row = index % metrics.rows;
+    const tx = panelX + 26 + col * metrics.colW;
+    const ty = listTop + row * metrics.lineHeight;
+    ctx.fillStyle = getColor(item);
+    ctx.font = `600 ${metrics.fontSize}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(label(item, index), tx, ty);
+  });
+}
+
+function drawPlacementLabel(ctx, x, y, w, h, placement) {
+  const id = String(placement.instance || placement.id || '').replace(/-/g, '');
+  const dimensions = `${Math.round(placement.w)} × ${Math.round(placement.h)}`;
+  const combined = `${id}  ${dimensions}`;
+  const horizontal = w >= h;
+  const longSide = horizontal ? w : h;
+  const shortSide = horizontal ? h : w;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + 4, y + 4, Math.max(0, w - 8), Math.max(0, h - 8));
+  ctx.clip();
+  ctx.fillStyle = '#243741';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // 薄长小料采用单行完整标签；竖向小料旋转 90°，避免只显示一半。
+  const maxWidth = Math.max(8, longSide - 12);
+  ctx.font = '600 48px sans-serif';
+  const widthFit = ctx.measureText(combined).width > 0
+    ? maxWidth / ctx.measureText(combined).width
+    : 1;
+  const fontSize = Math.max(10, Math.min(48, shortSide * 0.62, 48 * widthFit));
+  ctx.font = `600 ${fontSize}px sans-serif`;
+
+  if (horizontal) {
+    ctx.fillText(combined, x + w / 2, y + h / 2);
+  } else {
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(combined, 0, 0);
+  }
+  ctx.restore();
+}
+
 function line(ctx, x1, y1, x2, y2) { 
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); 
 }
@@ -146,35 +267,12 @@ function renderSlabCanvas(canvas, slab) {
   let ctx = canvas.getContext('2d');
   ctx.font = '600 26px sans-serif';
   
-  const offcutLabel = (r, index) => `${r.id || `R${String(index + 1).padStart(2, '0')}`}  ${Math.round(r.w)}×${Math.round(r.h)}`;
-  const sortedOffcuts = offcuts.slice().sort((a, b) => {
-    const na = Number(String(a.id || '').replace(/\D/g, '') || 0);
-    const nb = Number(String(b.id || '').replace(/\D/g, '') || 0);
-    return na - nb || String(a.id || '').localeCompare(String(b.id || ''), 'zh-CN');
-  });
-  
-  let maxLabelWidth = 0;
-  for (let i = 0; i < sortedOffcuts.length; i += 1) {
-    maxLabelWidth = Math.max(maxLabelWidth, ctx.measureText(offcutLabel(sortedOffcuts[i], i)).width);
-  }
+  const offcutGroups = groupByDimensions(offcuts);
+  const placementGroups = groupByDimensions(slab.placements || []);
   
   ctx.font = '700 38px sans-serif';
   const titleWidth = ctx.measureText('全部余料尺寸（100）块').width;
   const panelW = Math.ceil(titleWidth + 56);
-  
-  ctx.font = '700 40px sans-serif';
-  const mainTitle = `全部余料（${offcuts.length}块）`;
-  const mainTitleWidth = ctx.measureText(mainTitle).width;
-  const zoomK = Math.min(2.0, (panelW - 56) / mainTitleWidth);
-  const panelContentTop = 130;
-  const listHeight = Math.max(120, slabH - panelContentTop - 30);
-  const rowsPerColumn = Math.max(1, Math.floor(listHeight / (32 * zoomK)));
-  const columns = Math.max(1, Math.ceil(sortedOffcuts.length / rowsPerColumn));
-  const actualRows = Math.max(1, Math.ceil(sortedOffcuts.length / columns));
-  const lineHeight = Math.max(14, Math.min(46 * zoomK, listHeight / actualRows));
-  const colW = (panelW - 56) / columns;
-  const maxFit = maxLabelWidth > 0 ? Math.min(1, colW / maxLabelWidth) : 1;
-  const fontSize = Math.max(14, Math.min(32 * zoomK, 26 * maxFit * zoomK));
   
   const W = Math.ceil(padL + slabW + gap + panelW + padR);
   const H = Math.ceil(titleH + slabH + bottomH);
@@ -217,12 +315,7 @@ function renderSlabCanvas(canvas, slab) {
     ctx.strokeStyle = '#334956'; ctx.lineWidth = 5;
     if (moved) ctx.setLineDash([14, 10]); else ctx.setLineDash([]);
     ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
-    ctx.save(); ctx.beginPath(); ctx.rect(x + 4, y + 4, Math.max(0, w - 8), Math.max(0, h - 8)); ctx.clip();
-    ctx.fillStyle = '#243741'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const fontSize = Math.max(24, Math.min(48, w / 7, h / 3.4)); ctx.font = `700 ${fontSize}px sans-serif`;
-    ctx.fillText(String(p.instance || p.id || '').replace(/-/g, ''), x + w / 2, y + h / 2 - fontSize * .55);
-    ctx.font = `500 ${Math.max(22, fontSize * .72)}px sans-serif`; ctx.fillText(`${Math.round(p.w)} × ${Math.round(p.h)}`, x + w / 2, y + h / 2 + fontSize * .55); 
-    ctx.restore();
+    drawPlacementLabel(ctx, x, y, w, h, p);
     ctx.globalAlpha = 1;
   }
   
@@ -269,17 +362,39 @@ function renderSlabCanvas(canvas, slab) {
   const panelX = ox + slabW + gap, panelY = panelTop;
   ctx.fillStyle = '#f7f9f8'; ctx.strokeStyle = '#ccd5d1'; ctx.lineWidth = 4; ctx.setLineDash([]); 
   ctx.fillRect(panelX, panelY, panelW, panelH); ctx.strokeRect(panelX, panelY, panelW, panelH);
-  
-  ctx.fillStyle = '#29483f'; ctx.font = `700 ${Math.round(40 * zoomK)}px sans-serif`; 
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; 
-  ctx.fillText(mainTitle, panelX + 28, panelY + 62);
-  
-  const listTop = panelY + 110;
-  sortedOffcuts.forEach((r, index) => {
-    const col = Math.floor(index / actualRows), row = index % actualRows;
-    const tx = panelX + 26 + col * colW, ty = listTop + row * lineHeight;
-    ctx.fillStyle = offcutColors(r).text; ctx.font = `600 ${fontSize}px sans-serif`; ctx.textAlign = 'left';
-    ctx.fillText(offcutLabel(r, index), tx, ty);
+
+  // 右侧矩形框尺寸保持不变，上半部分列出本板全部成品，下半部分保留原余料清单。
+  const dividerY = panelY + Math.round(panelH * 0.5);
+  ctx.strokeStyle = '#ccd5d1'; ctx.lineWidth = 3;
+  line(ctx, panelX + 18, dividerY, panelX + panelW - 18, dividerY);
+
+  // 恢复原“全部余料”标题的动态字号，并让上下两个标题统一使用该字号。
+  ctx.font = '700 40px sans-serif';
+  const panelTitleWidth = ctx.measureText(`全部余料（${offcuts.length}块）`).width;
+  const titleZoom = Math.min(2, (panelW - 56) / Math.max(1, panelTitleWidth));
+  const panelTitleFont = Math.round(40 * titleZoom);
+
+  drawPanelList(ctx, {
+    title: `全部下料（${slab.placements.length}件）`,
+    items: placementGroups,
+    label: (group) => groupLabel(group, { placement: true }),
+    getColor: () => OFFCUT_COLORS.small.text,
+    panelX,
+    panelY,
+    panelW,
+    sectionH: dividerY - panelY,
+    titleFont: panelTitleFont,
+  });
+  drawPanelList(ctx, {
+    title: `全部余料（${offcuts.length}块）`,
+    items: offcutGroups,
+    label: (group) => groupLabel(group),
+    getColor: (r) => offcutColors(r).text,
+    panelX,
+    panelY: dividerY + 8,
+    panelW,
+    sectionH: panelY + panelH - dividerY - 8,
+    titleFont: panelTitleFont,
   });
 }
 

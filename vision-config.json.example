@@ -1,0 +1,5 @@
+{
+  "baseUrl": "https://你的 Agent Vision Toolkit 兼容接口地址",
+  "apiKey": "在本机填写，不要提交真实 Key",
+  "model": "你的视觉模型名称"
+}

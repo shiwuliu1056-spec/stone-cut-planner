@@ -13,6 +13,7 @@ const http = require('http');
 const { importParts, exportWorkbook, exportWord } = require('./src/workbook');
 const { solve } = require('./src/solver');
 const { checkForUpdate, startApply, progress: getUpdateProgress } = require('./src/updater');
+const { recognizePhoto } = require('./src/gemini-ocr');
 
 // ── 请求体大小限制（字节） ────────────────────────────────────────────────
 const LIMITS = {
@@ -20,6 +21,7 @@ const LIMITS = {
   solve: 5 * 1024 * 1024,         // 仅 JSON 参数，无图片
   export: 60 * 1024 * 1024,       // 含排版渲染图 Base64，体积较大
   exportWord: 60 * 1024 * 1024,
+  photoOcr: 22 * 1024 * 1024,
 };
 
 // ── CORS ──────────────────────────────────────────────────────────────────
@@ -127,6 +129,16 @@ async function handleImport(req, res) {
   sendJson(res, 200, { parts });
 }
 
+async function handlePhotoOcr(req, res) {
+  const body = await readJsonBody(req, LIMITS.photoOcr);
+  if (!body || typeof body.image !== 'string') {
+    sendError(res, 400, '缺少图片内容');
+    return;
+  }
+  const result = await recognizePhoto({ image: body.image, unit: body.unit });
+  sendJson(res, 200, result);
+}
+
 async function handleSolve(req, res) {
   const body = await readJsonBody(req, LIMITS.solve);
   const invalidReason = validateSolveRequest(body);
@@ -183,6 +195,7 @@ function handleUpdateProgress(req, res) {
 function buildRoutes(server, exit) {
   return [
     { method: 'POST', path: '/api/import', handler: handleImport },
+    { method: 'POST', path: '/api/ocr/photo', handler: handlePhotoOcr },
     { method: 'POST', path: '/api/solve', handler: handleSolve },
     { method: 'POST', path: '/api/export', handler: handleExport },
     { method: 'POST', path: '/api/export-word', handler: handleExportWord },

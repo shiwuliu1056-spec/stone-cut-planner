@@ -33,10 +33,10 @@ const recalculateIds = (items, getPrefixOrId) => {
 };
 
 const recalculatePartIdsByArea = (parts) => {
-  // 按面积(w * h)从大到小排序，面积相同的按原先顺序（这里简单处理）
+  // 按单片面积(w * h)从大到小排序；数量只用于排版，不参与 A/B/C 编号。
   const sorted = [...parts].sort((a, b) => {
-    const areaA = (Number(a.w) || 0) * (Number(a.h) || 0) * (Number(a.qty) || 0);
-    const areaB = (Number(b.w) || 0) * (Number(b.h) || 0) * (Number(b.qty) || 0);
+    const areaA = (Number(a.w) || 0) * (Number(a.h) || 0);
+    const areaB = (Number(b.w) || 0) * (Number(b.h) || 0);
     return areaB - areaA;
   });
   

@@ -2,6 +2,7 @@ import { SlabsPanel } from "@/components/SlabsPanel";
 import { PartsPanel } from "@/components/PartsPanel";
 import { ActionConsole } from "@/components/ActionConsole";
 import { ResultViewer } from "@/components/ResultViewer";
+import { FooterActions } from "@/components/FooterActions";
 
 export default function Home() {
   return (
@@ -34,12 +35,8 @@ export default function Home() {
 
       <footer className="mt-20 border-t border-slate-200 bg-white py-8 text-center text-slate-500 text-sm">
         <div className="max-w-6xl mx-auto px-4 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p>Windows 10/11 · WPS 可打开导出文件 · v2.0.0-Next</p>
-          <div className="flex gap-4">
-            <button className="hover:text-blue-600 transition-colors font-medium">检查更新</button>
-            <span className="text-slate-300">|</span>
-            <button className="hover:text-rose-600 transition-colors font-medium">退出工具</button>
-          </div>
+          <p>Windows 8/10/11 · WPS 可打开导出文件 · v2.0.0-Next</p>
+          <FooterActions />
         </div>
       </footer>
     </div>

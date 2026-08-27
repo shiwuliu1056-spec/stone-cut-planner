@@ -9,12 +9,15 @@
     "install:frontend": "npm --prefix frontend install",
     "postinstall": "npm run install:backend && npm run install:frontend",
     "dev": "node backend/server.js",
-    "build": "npm --prefix frontend run build",
+    "build": "npm run build:frontend",
+    "build:win8": "node scripts/build-win8.js",
+    "copy:vision-config": "node scripts/copy-vision-config.js",
+    "package:win8": "node scripts/package-win8.js",
     "start": "node backend/server.js --prod",
     "start:prod": "npm run build && npm run start",
     "test:backend": "node --test backend/tests/*.test.js",
     "lint:frontend": "npm --prefix frontend run lint",
-    "build:frontend": "npm --prefix frontend run build",
+    "build:frontend": "node scripts/prepare-ocr-assets.js && npm --prefix frontend run build",
     "test": "npm run test:backend && npm run lint:frontend && npm run build:frontend"
   },
   "engines": {

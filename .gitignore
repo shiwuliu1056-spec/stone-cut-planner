@@ -1,6 +1,9 @@
 node_modules/
+dist/
 .env
 .env.*
+vision-config.json
+eng.traineddata
 *.local
 .DS_Store
 npm-debug.log*
