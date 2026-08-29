@@ -64,14 +64,23 @@ const loadInitialState = () => {
         if (parsed.slabs && parsed.parts) {
           parsed.slabs = recalculateIds(parsed.slabs, getChineseId);
           parsed.parts = recalculatePartIdsByArea(parsed.parts);
-          return parsed;
+          return {
+            ...parsed,
+            algorithm: parsed.algorithm === 'fast' ? 'fast' : 'standard',
+            fastPreset: ['material', 'balanced', 'speed'].includes(parsed.fastPreset) ? parsed.fastPreset : 'balanced',
+          };
         }
       }
     } catch (e) {
       console.error("加载草稿失败", e);
     }
   }
-  return { slabs: recalculateIds(sampleSlabs, getChineseId), parts: recalculatePartIdsByArea(sampleParts) };
+  return {
+    slabs: recalculateIds(sampleSlabs, getChineseId),
+    parts: recalculatePartIdsByArea(sampleParts),
+    algorithm: 'standard',
+    fastPreset: 'balanced',
+  };
 };
 
 export const useStore = create((set, get) => {
@@ -90,9 +99,11 @@ export const useStore = create((set, get) => {
       const nextState = { ...state, ...updates, slabs: nextSlabs, parts: nextParts };
       
       if (typeof window !== 'undefined') {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
           slabs: nextSlabs,
-          parts: nextParts
+          parts: nextParts,
+          algorithm: nextState.algorithm,
+          fastPreset: nextState.fastPreset,
         }));
       }
       return nextState;
@@ -102,6 +113,8 @@ export const useStore = create((set, get) => {
   return {
     slabs: initialState.slabs,
     parts: initialState.parts,
+    algorithm: initialState.algorithm || 'standard',
+    fastPreset: initialState.fastPreset || 'balanced',
     isSolving: false,
     result: null,
 
@@ -127,9 +140,11 @@ export const useStore = create((set, get) => {
     addPartRow: () => updateStateAndSave(state => ({ parts: [...state.parts, { id: '', w: 0, h: 0, qty: 1 }] })),
     removePartRow: (index) => updateStateAndSave(state => ({ parts: state.parts.filter((_, i) => i !== index) })),
     setParts: (parts) => updateStateAndSave({ parts }),
+    setAlgorithm: (algorithm) => updateStateAndSave({ algorithm: algorithm === 'fast' ? 'fast' : 'standard', result: null }),
+    setFastPreset: (fastPreset) => updateStateAndSave({ fastPreset, result: null }),
 
     // --- 全局操作 ---
-    resetDefault: () => updateStateAndSave({ slabs: sampleSlabs, parts: sampleParts, result: null }),
+    resetDefault: () => updateStateAndSave({ slabs: sampleSlabs, parts: sampleParts, algorithm: 'standard', fastPreset: 'balanced', result: null }),
     setSolving: (status) => set({ isSolving: status }),
     setResult: (result) => set({ result }),
   };

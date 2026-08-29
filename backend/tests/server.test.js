@@ -158,6 +158,32 @@ test('POST /api/solve 合法参数返回 200 且 result.plans.A 结构符合契�
   }
 });
 
+test('POST /api/solve algorithm=fast 返回快切统计且不改变标准接口主结构', async () => {
+  const { server, baseUrl } = await startServer();
+  try {
+    const res = await fetch(`${baseUrl}/api/solve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        settings: {
+          algorithm: 'fast',
+          fastPreset: 'speed',
+          slabs: [{ id: '甲', w: 1200, h: 200, limit: null }],
+        },
+        parts: [{ id: 'A', w: 200, h: 100, qty: 5, rotatable: false }],
+      }),
+    });
+    assert.equal(res.status, 200);
+    const plan = (await res.json()).result.plans.A;
+    assert.equal(plan.stats.fastCut.preset, 'speed');
+    assert.equal(plan.slabs[0].fastCut.cutCount, plan.slabs[0].fastCut.operations.length);
+    assert.ok(Array.isArray(plan.slabs[0].cuts));
+    assert.ok(Array.isArray(plan.slabs[0].allOffcuts));
+  } finally {
+    await stopServer(server);
+  }
+});
+
 test('POST /api/solve 参数合法但无法排下全部成品时返回 400', async () => {
   const { server, baseUrl } = await startServer();
   try {
@@ -414,12 +440,14 @@ test('GET /api/update/check 未配置更新地址时返回 configured:false', as
   const { server, baseUrl } = await startServer();
   try {
     delete process.env.STONE_UPDATER_URL;
+    process.env.STONE_UPDATER_DISABLED = '1';
     const res = await fetch(`${baseUrl}/api/update/check`, { method: 'GET' });
     assert.equal(res.status, 200);
     const data = await res.json();
     assert.equal(data.configured, false);
     assert.match(data.error, /未配置/);
   } finally {
+    delete process.env.STONE_UPDATER_DISABLED;
     await stopServer(server);
   }
 });

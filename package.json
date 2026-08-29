@@ -13,6 +13,7 @@
     "build:win8": "node scripts/build-win8.js",
     "copy:vision-config": "node scripts/copy-vision-config.js",
     "package:win8": "node scripts/package-win8.js",
+    "release:win8": "node scripts/release-win8.js",
     "start": "node backend/server.js --prod",
     "start:prod": "npm run build && npm run start",
     "test:backend": "node --test backend/tests/*.test.js",

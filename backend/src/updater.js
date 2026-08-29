@@ -36,6 +36,7 @@ function resolveConfigPath() {
 }
 
 function resolveUpdateUrl() {
+  if (process.env.STONE_UPDATER_DISABLED === '1') return '';
   const fromEnv = (process.env.STONE_UPDATER_URL || '').trim();
   if (fromEnv) return fromEnv;
   try {

@@ -6,12 +6,17 @@ import { Play, Download } from "lucide-react";
 import { requestJson, downloadBlob } from "@/lib/api";
 
 export function ActionConsole() {
-  const { parts, slabs, isSolving, result, setSolving, setResult } = useStore();
+  const {
+    parts, slabs, algorithm, fastPreset, isSolving, result,
+    setAlgorithm, setFastPreset, setSolving, setResult,
+  } = useStore();
 
   const handleSolve = async () => {
     try {
       setSolving(true);
       const settings = {
+        algorithm,
+        ...(algorithm === 'fast' ? { fastPreset } : {}),
         slabs: slabs.map(s => ({
           id: s.id,
           w: Number(s.w),
@@ -34,6 +39,10 @@ export function ActionConsole() {
       });
 
       setResult(data.result);
+
+      if (algorithm === 'fast' && data.result?.plans?.A?.stats?.fastCut?.warning) {
+        alert(data.result.plans.A.stats.fastCut.warning);
+      }
       
       // Scroll to results slightly after render
       setTimeout(() => {
@@ -94,11 +103,39 @@ export function ActionConsole() {
           自动排版
         </h3>
         <p className="text-slate-400 mt-1 text-sm">
-          算法将尝试最优摆放，先大后小，余料集中
+          {algorithm === 'fast'
+            ? '严格矩形块切，优先减少搬动；固定按刀片宽度 4mm 计算'
+            : '算法将尝试最优摆放，先大后小，余料集中；固定按刀片宽度 4mm 计算'}
         </p>
       </div>
 
       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 text-sm text-slate-300">
+          <label htmlFor="algorithm-select">算法</label>
+          <select
+            id="algorithm-select"
+            value={algorithm}
+            onChange={(e) => setAlgorithm(e.target.value)}
+            disabled={isSolving}
+            className="h-10 rounded-md border border-slate-700 bg-slate-800 px-3 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <option value="standard">标准排版</option>
+            <option value="fast">快切算法</option>
+          </select>
+          {algorithm === 'fast' && (
+            <select
+              aria-label="快切预设"
+              value={fastPreset}
+              onChange={(e) => setFastPreset(e.target.value)}
+              disabled={isSolving}
+              className="h-10 rounded-md border border-slate-700 bg-slate-800 px-3 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <option value="material">节省材料（90%）</option>
+              <option value="balanced">平衡（80%）</option>
+              <option value="speed">优先快切（70%）</option>
+            </select>
+          )}
+        </div>
         <Button 
           variant="outline" 
           size="lg" 

@@ -20,6 +20,9 @@
 - 从 Excel 导入小料清单
 - 拍照识别手写或打印的“长度 × 宽度 = 数量”记录（支持 mm/cm 单位选择）
 - 自动排版并支持零件旋转
+- 支持“标准排版”和“快切算法”：快切按严格矩形块切，优先减少现场搬动
+- 每个连续切割方向的末端块可吸收最多 4mm 刀片损耗，结果显示实际尺寸
+- 快切会按相同长×宽尺寸分批排放，尽量先完成同一尺寸再切换下一种
 - 展示母板数量、余料块数和余料面积
 - 使用 Canvas 绘制排版图和切割线
 - 导出 Excel 尺寸表与 Word 排版图
@@ -32,7 +35,7 @@
 - 文件处理：ExcelJS、docx
 - 测试：Node.js 内置测试运行器、ESLint、Next.js production build
 
-后端和前端由同一个 Node.js 进程提供服务。排版算法位于 `backend/src/solver.js`，使用确定性的矩形候选搜索、旋转处理和余料几何评价指标生成方案。
+后端和前端由同一个 Node.js 进程提供服务。排版算法位于 `backend/src/solver.js`：标准排版使用确定性的矩形候选搜索、旋转处理和余料几何评价指标；快切算法使用严格矩形块切，并按搬动次数、实际下刀次数和材料利用率选择方案。所有方案固定按 4mm 刀片宽度计算，刀片损耗不计入余料。
 
 ## 环境要求
 
@@ -98,6 +101,14 @@ npm run package:win8
 `WIN8_BAT`、`WIN8_ICON` 和 `WIN8_NODE` 都是从旧绿色包复制的外部文件，打包脚本不会修改或重新生成它们。生成的 `dist/win8/` 目录可直接交给 Win8 测试机；旧 BAT 仍使用 `node.exe server.js` 启动。普通 `npm run dev`、`npm run start:prod` 和依赖版本不变。
 
 Win8 绿色版的更新只替换 ZIP：在绿色包根目录放置 `update-config.json`，内容为 `{"url":"https://你的地址/update-manifest.json"}`。清单中的 `url` 应指向新版绿色 ZIP，并提供 `version`、`sha256` 和可选的 `notes`；点击页脚“检查更新”后，程序会下载、校验、关闭、替换并重新启动。
+
+正式发布新版时使用：
+
+```bash
+npm run release:win8 -- 1.1.0
+```
+
+该命令会自动同步版本号、构建并打包 Win8 绿色包、计算 SHA256、更新 `update-manifest.json`、提交并推送 GitHub，然后创建对应的 Release。普通 `git commit` 不会触发发布。
 
 ## 测试与检查
 

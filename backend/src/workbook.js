@@ -210,7 +210,7 @@ function numberId(value) {
 }
 
 /**
- * 根据 API.md 中 plan.stats 的约定字段（slabCount / offcutCount / offcutArea）
+ * 根据 API.md 中 plan.stats 的约定字段（slabCount / offcutCount / offcutArea / kerfWasteArea）
  * 生成概览统计；若传入的最小结果对象缺少 stats，则从 slabs 推算兜底，
  * 保证不依赖 solver 也能正常导出。
  */
@@ -224,7 +224,10 @@ function planStats(plan) {
   const offcutArea = Number.isFinite(stats.offcutArea)
     ? stats.offcutArea
     : slabs.reduce((n, s) => n + (s.allOffcuts || []).reduce((a, o) => a + (Number(o.w) * Number(o.h) || 0), 0), 0);
-  return { slabCount, offcutCount, offcutArea };
+  const kerfWasteArea = Number.isFinite(stats.kerfWasteArea)
+    ? stats.kerfWasteArea
+    : slabs.reduce((n, s) => n + (Number(s.kerfWasteArea) || 0), 0);
+  return { slabCount, offcutCount, offcutArea, kerfWasteArea };
 }
 
 /** 按 (板号, 成品编号) 汇总 placements，得到成品下料尺寸表的行数据。 */
@@ -232,10 +235,11 @@ function productRows(plan) {
   const grouped = new Map();
   for (const slab of plan.slabs || []) {
     for (const placement of slab.placements || []) {
-      const key = `${slab.index}\u0000${placement.id}`;
+      const shortage = Number(placement.shortage) || 0;
+      const key = `${slab.index}\u0000${placement.id}\u0000${placement.w}\u0000${placement.h}\u0000${shortage}`;
       const current = grouped.get(key) || {
         slab: slab.index,
-        id: placement.id,
+        id: shortage ? `${placement.id}（末端少${shortage}mm）` : placement.id,
         w: Number(placement.w),
         h: Number(placement.h),
         qty: 0,
@@ -333,15 +337,17 @@ function addDimensionsSheet(wb, result) {
   ws.getRow(2).height = 12;
   styleTitle(ws, 'A1:H2', `${planName()}－下料尺寸表`);
 
-  // 概览统计行（仅使用 API.md 约定的 stats 字段：slabCount / offcutCount / offcutArea）
+  // 概览统计行（含固定 4mm 刀片损耗面积）
   ws.getCell('A4').value = '母板数量'; ws.getCell('B4').value = stats.slabCount;
   ws.getCell('C4').value = '余料块数'; ws.getCell('D4').value = stats.offcutCount;
   ws.getCell('E4').value = '余料总面积(㎡)'; ws.getCell('F4').value = stats.offcutArea / 1e6;
+  ws.getCell('G4').value = '刀片损耗面积(㎡)'; ws.getCell('H4').value = stats.kerfWasteArea / 1e6;
   ws.getCell('A5').value = '母板净尺寸'; ws.getCell('B5').value = slabSizes(plan);
-  for (const addr of ['A4', 'C4', 'E4', 'A5']) {
+  for (const addr of ['A4', 'C4', 'E4', 'G4', 'A5']) {
     ws.getCell(addr).font = { name: 'Microsoft YaHei', bold: true, color: { argb: COLORS.teal } };
   }
   ws.getCell('F4').numFmt = '0.000';
+  ws.getCell('H4').numFmt = '0.000';
 
   // 成品下料尺寸
   styleSection(ws.getRow(7), '成品下料尺寸', 7);
@@ -500,7 +506,7 @@ function twoRectsOverlap(a, b) {
  *   - 每张母板内 placements 互不重叠、offcuts 互不重叠、成品与空块互不重叠；
  *   - 面积守恒：Σplacement + Σoffcut == 母板面积；
  *   - 空块编号在单板内唯一；
- *   - stats（若提供）与实际 slabCount/offcutCount/offcutArea 一致。
+ *   - stats（若提供）与实际 slabCount/offcutCount/offcutArea/kerfWasteArea 一致。
  */
 function assertExportIntegrity(plan) {
   const slabs = plan.slabs;
@@ -510,6 +516,7 @@ function assertExportIntegrity(plan) {
   const seenIndex = new Set();
   let totalOffcutArea = 0;
   let totalOffcutCount = 0;
+  let totalKerfWasteArea = 0;
 
   slabs.forEach((slab, si) => {
     const tag = `第 ${si + 1} 块母板`;
@@ -575,13 +582,18 @@ function assertExportIntegrity(plan) {
     // 面积守恒
     const placedArea = placements.reduce((s, p) => s + p.w * p.h, 0);
     const offArea = offcuts.reduce((s, o) => s + o.w * o.h, 0);
-    if (placedArea + offArea !== slab.w * slab.h) {
+    const kerfArea = Number(slab.kerfWasteArea) || 0;
+    if (!Number.isInteger(kerfArea) || kerfArea < 0) {
+      throw new Error(`导出校验失败：${tag}(${slab.id}) 刀片损耗面积非法`);
+    }
+    if (placedArea + offArea + kerfArea !== slab.w * slab.h) {
       throw new Error(
-        `导出校验失败：${tag}(${slab.id}) 面积不守恒（成品${placedArea}+空块${offArea}≠母板${slab.w * slab.h}）`,
+        `导出校验失败：${tag}(${slab.id}) 面积不守恒（成品${placedArea}+空块${offArea}+刀片损耗${kerfArea}≠母板${slab.w * slab.h}）`,
       );
     }
     totalOffcutArea += offArea;
     totalOffcutCount += offcuts.length;
+    totalKerfWasteArea += kerfArea;
   });
 
   // stats 一致性（若提供）
@@ -595,6 +607,9 @@ function assertExportIntegrity(plan) {
     }
     if (stats.offcutArea != null && Math.abs(Number(stats.offcutArea) - totalOffcutArea) > 1e-6) {
       throw new Error(`导出校验失败：stats.offcutArea(${stats.offcutArea}) 与实际空块面积(${totalOffcutArea})不一致`);
+    }
+    if (stats.kerfWasteArea != null && Math.abs(Number(stats.kerfWasteArea) - totalKerfWasteArea) > 1e-6) {
+      throw new Error(`导出校验失败：stats.kerfWasteArea(${stats.kerfWasteArea}) 与实际刀片损耗面积(${totalKerfWasteArea})不一致`);
     }
   }
 }

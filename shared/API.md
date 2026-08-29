@@ -53,6 +53,8 @@ Excel 文件的二进制数据 (ArrayBuffer / Blob)
 ```json
 {
   "settings": {
+    "algorithm": "standard",
+    "fastPreset": "balanced",
     "slabs": [
       {
         "id": "甲",
@@ -73,7 +75,7 @@ Excel 文件的二进制数据 (ArrayBuffer / Blob)
   ]
 }
 ```
-*注：`limit` 代表大板可用数量上限，`null` 或空字符串代表不限。部分旧版高级参数 (`overcut`, `kerf`, `iterations`) 已被弃用（后端兼容忽略），`minOffcut`, `sampleSide`, `stripSide` 彻底移除。*
+*注：`limit` 代表大板可用数量上限，`null` 或空字符串代表不限。`algorithm` 可选 `standard`（默认）或 `fast`（快切算法）；快切算法的 `fastPreset` 可选 `material`（90%）、`balanced`（80%）或 `speed`（70%）。快切按相同长×宽尺寸分组，组内尽量连续排放，再按严格矩形块切规划，优先减少搬动次数和实际下刀次数。当前排版固定按刀片宽度 4mm 计算；`overcut`、`iterations` 等旧字段仍被忽略，`minOffcut`、`sampleSide`、`stripSide` 彻底移除。*
 
 **响应数据 (成功 - 200 OK)**:
 ```json
@@ -84,7 +86,8 @@ Excel 文件的二进制数据 (ArrayBuffer / Blob)
         "stats": {
           "slabCount": 1,
           "offcutCount": 2,
-          "offcutArea": 1250000
+          "offcutArea": 1250000,
+          "kerfWasteArea": 0
         },
         "slabs": [
           {
@@ -100,7 +103,8 @@ Excel 文件的二进制数据 (ArrayBuffer / Blob)
             ],
             "allOffcuts": [
               { "id": "R01", "x": 1400, "y": 0, "w": 1300, "h": 1800 }
-            ]
+            ],
+            "kerfWasteArea": 0
           }
         ]
       }
@@ -108,7 +112,11 @@ Excel 文件的二进制数据 (ArrayBuffer / Blob)
   }
 }
 ```
-*注：前端使用 `result.plans.A` 进行结果展示。返回的余料中 `reusable` 字段已被弃用（若返回固定为 `true`）。*
+*注：前端使用 `result.plans.A` 进行结果展示。`kerfWasteArea` 表示刀片宽度造成的不可回收损耗，不属于余料。返回的余料中 `reusable` 字段已被弃用（若返回固定为 `true`）。*
+
+当某个连续切割方向的末端块只能比请求尺寸少不超过 4mm 时，成品条目会保留 `requestedW` / `requestedH`、`shortage`、`shortageAxis` 和 `terminal: true`，其中 `w` / `h` 是实际切割尺寸；中间成品不会使用此容差。
+
+快切结果的 `stats.fastCut` 和每张母板的 `fastCut` 为内部统计，包含预设、材料利用率、预计搬动次数、预计下刀次数及严格块切操作记录；当前界面和导出文件仍只展示最终排版图。
 
 ---
 

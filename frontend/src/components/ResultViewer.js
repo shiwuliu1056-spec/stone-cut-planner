@@ -108,7 +108,7 @@ function drawPanelList(ctx, { title, items, label, getColor, panelX, panelY, pan
 
 function drawPlacementLabel(ctx, x, y, w, h, placement) {
   const id = String(placement.instance || placement.id || '').replace(/-/g, '');
-  const dimensions = `${Math.round(placement.w)} × ${Math.round(placement.h)}`;
+  const dimensions = `${Math.round(placement.w)} × ${Math.round(placement.h)}${placement.shortage ? `（少${Math.round(placement.shortage)}mm）` : ''}`;
   const combined = `${id}  ${dimensions}`;
   const horizontal = w >= h;
   const longSide = horizontal ? w : h;
@@ -419,7 +419,7 @@ function SlabCanvas({ slab }) {
 }
 
 export function ResultViewer() {
-  const { result } = useStore();
+  const { result, algorithm } = useStore();
 
   if (!result || !result.plans || !result.plans.A) {
     return null;
@@ -439,13 +439,13 @@ export function ResultViewer() {
             <h2 className="text-xl font-bold text-slate-800 mt-1 flex items-center gap-3">
               切割方案
               <span className="text-sm font-normal px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100">
-                先大后小 · 余料集中
+                {algorithm === 'fast' ? '快切算法 · 严格块切 · 刀片宽度 4mm' : '先大后小 · 余料集中 · 刀片宽度 4mm'}
               </span>
             </h2>
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50/50">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-slate-50/50">
           <div className="bg-white p-5 rounded-lg border border-slate-100 shadow-sm flex flex-col">
             <span className="text-slate-500 text-sm font-medium mb-1">母板数量</span>
             <strong className="text-3xl font-bold text-slate-800">{s.slabCount}</strong>
@@ -457,6 +457,10 @@ export function ResultViewer() {
           <div className="bg-white p-5 rounded-lg border border-slate-100 shadow-sm flex flex-col">
             <span className="text-slate-500 text-sm font-medium mb-1">余料总面积</span>
             <strong className="text-3xl font-bold text-slate-800">{formatArea(s.offcutArea)}</strong>
+          </div>
+          <div className="bg-white p-5 rounded-lg border border-slate-100 shadow-sm flex flex-col">
+            <span className="text-slate-500 text-sm font-medium mb-1">刀片损耗（4mm）</span>
+            <strong className="text-3xl font-bold text-slate-800">{formatArea(s.kerfWasteArea || 0)}</strong>
           </div>
         </div>
       </div>

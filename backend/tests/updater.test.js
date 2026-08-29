@@ -71,7 +71,9 @@ test('checkForUpdate 清单格式错误时给出错误信息', async () => {
 
 test('未配置更新地址时返回 configured:false', async () => {
   delete process.env.STONE_UPDATER_URL;
+  process.env.STONE_UPDATER_DISABLED = '1';
   const info = await checkForUpdate();
+  delete process.env.STONE_UPDATER_DISABLED;
   assert.equal(info.configured, false);
   assert.match(info.error, /未配置/);
 });

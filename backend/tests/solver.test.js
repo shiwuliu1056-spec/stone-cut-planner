@@ -17,6 +17,7 @@ const { solve, _internal } = require('../src/solver');
 const {
   buildGrid, countEmptyRegions, countContourEdges, freeOffcutRects,
   candidatePositions, layoutMetrics, cmpMetrics, specOrder,
+  splitFastRegion, mergeFastCuts, splitRecoverableOffcuts,
 } = _internal;
 
 // ── 通用辅助 ────────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ function slabGeometryValid(slab) {
   }
   const placed = rs.reduce((s, p) => s + p.w * p.h, 0);
   const off = slab.allOffcuts.reduce((s, o) => s + o.w * o.h, 0);
-  return placed + off === slab.w * slab.h;
+  return placed + off + (slab.kerfWasteArea || 0) === slab.w * slab.h;
 }
 function planGeometryValid(plan) {
   return plan.slabs.every(slabGeometryValid);
@@ -167,7 +168,7 @@ test('[R1] 单板内先放面积更大的规格', () => {
 test('[R2] 当前规格能放满时不提前进入下一规格', () => {
   // L 可放 2 件（600×400 竖排两行），S 才开始
   const r = solve({
-    settings: { slabs: [S('甲', 600, 1000)] },
+    settings: { slabs: [S('甲', 600, 1010)] },
     parts: [P('L', 600, 400, 2, false), P('S', 600, 200, 1, false)],
   });
   const placements = r.plans.A.slabs[0].placements;
@@ -175,7 +176,7 @@ test('[R2] 当前规格能放满时不提前进入下一规格', () => {
   assert.equal(lCount, 2, 'L 的两件应在 S 之前全部放入');
   // 两件 L 占据 y=0..800，S 只能在 y=800..1000
   const s = placements.find((p) => p.id === 'S');
-  assert.equal(s.y, 800);
+  assert.equal(s.y, 808);
 });
 
 // R3 + R4：换规格前只重排当前最小规格组；更大规格坐标冻结
@@ -340,14 +341,162 @@ test('freeOffcutRects 覆盖全部空白且互不相交、面积等于母板减�
   }
 });
 
-test('废弃参数（overcut/minOffcut/sampleSide/stripSide/kerf/iterations）不改变核心排版', () => {
+test('废弃参数（overcut/minOffcut/sampleSide/stripSide/iterations）不改变核心排版', () => {
   const base = { settings: { slabs: [S('甲', 2700, 1800)] }, parts: [P('A', 1400, 600, 3, true)] };
   const withJunk = {
     settings: {
       slabs: [S('甲', 2700, 1800)],
-      overcut: 5, minOffcut: 100, sampleSide: 'x', stripSide: 'y', kerf: 3, iterations: 999,
+      overcut: 5, minOffcut: 100, sampleSide: 'x', stripSide: 'y', iterations: 999,
     },
     parts: [P('A', 1400, 600, 3, true)],
   };
   assert.equal(JSON.stringify(solve(base)), JSON.stringify(solve(withJunk)));
+});
+
+test('固定刀片宽度 4mm：中间块留刀口，方向末端块可少 4mm', () => {
+  const settings = { slabs: [S('甲', 1200, 200, null)] };
+  const five = solve({ settings, parts: [P('A', 200, 100, 5, false)] });
+  assert.equal(five.plans.A.slabs.length, 1);
+  assert.deepEqual(five.plans.A.slabs[0].placements.map((p) => p.x), [0, 204, 408, 612, 816]);
+  assert.equal(five.plans.A.slabs[0].kerfWasteArea, 4 * 4 * 100);
+
+  const six = solve({ settings, parts: [P('A', 200, 100, 6, false)] });
+  assert.equal(six.plans.A.slabs.length, 1);
+  assert.equal(six.plans.A.slabs[0].placements.length, 6);
+  assert.ok(six.plans.A.slabs[0].placements.some((p) => p.terminal && p.shortage === 4));
+});
+
+test('固定刀片宽度不改变成品自身尺寸，面积由余料与刀片损耗共同守恒', () => {
+  const result = solve({
+    settings: { slabs: [S('甲', 1000, 100, 1)] },
+    parts: [P('A', 300, 100, 2, false)],
+  });
+  const slab = result.plans.A.slabs[0];
+  assert.deepEqual(slab.placements.map((p) => [p.w, p.h]), [[300, 100], [300, 100]]);
+  const placed = slab.placements.reduce((sum, p) => sum + p.w * p.h, 0);
+  const offcuts = slab.allOffcuts.reduce((sum, o) => sum + o.w * o.h, 0);
+  assert.equal(placed + offcuts + slab.kerfWasteArea, slab.w * slab.h);
+  assert.equal(slab.kerfWasteArea, 4 * 100);
+});
+
+test('标准和快切算法都允许每个方向末端块吸收最多 4mm 损耗', () => {
+  for (const algorithm of ['standard', 'fast']) {
+    const result = solve({
+      settings: { algorithm, fastPreset: 'speed', slabs: [S('甲', 800, 1600, null)] },
+      parts: [P('A', 800, 800, 2, false)],
+    });
+    const slab = result.plans.A.slabs[0];
+    assert.equal(slab.placements.length, 2);
+    assert.deepEqual([slab.placements[0].w, slab.placements[0].h], [800, 800]);
+    assert.equal(slab.placements[1].h, 796);
+    assert.equal(slab.placements[1].shortage, 4);
+    assert.equal(slab.placements[1].shortageAxis, 'h');
+    assert.equal(slab.placements[1].terminal, true);
+    assert.equal(slab.placements[1].requestedH, 800);
+    assert.ok(planGeometryValid(result.plans.A));
+  }
+});
+
+test('刀片交叉点不应被登记为 4×4 余料', () => {
+  const result = solve({
+    settings: { slabs: [S('甲', 2700, 1800, null)] },
+    parts: [P('C', 700, 700, 6, false)],
+  });
+  const slab = result.plans.A.slabs[0];
+  assert.equal(slab.placements.length, 6);
+  assert.ok(!slab.allOffcuts.some((o) => o.w === 4 && o.h === 4));
+  const placed = slab.placements.reduce((sum, p) => sum + p.w * p.h, 0);
+  const offcuts = slab.allOffcuts.reduce((sum, o) => sum + o.w * o.h, 0);
+  assert.equal(placed + offcuts + slab.kerfWasteArea, slab.w * slab.h);
+});
+
+test('分段刀路交叉点也不应留下 4×4 余料', () => {
+  const result = solve({
+    settings: { slabs: [S('甲', 2400, 1600, null)] },
+    parts: [
+      P('A', 900, 600, 4, true),
+      P('B', 1000, 500, 2, true),
+      P('C', 600, 600, 2, false),
+    ],
+  });
+  for (const slab of result.plans.A.slabs) {
+    assert.ok(!slab.allOffcuts.some((o) => o.w === 4 && o.h === 4));
+    const placed = slab.placements.reduce((sum, p) => sum + p.w * p.h, 0);
+    const offcuts = slab.allOffcuts.reduce((sum, o) => sum + o.w * o.h, 0);
+    assert.equal(placed + offcuts + slab.kerfWasteArea, slab.w * slab.h);
+  }
+});
+
+test('4mm 窄条统一归入刀片损耗，不出现在余料清单', () => {
+  const result = splitRecoverableOffcuts([
+    { x: 0, y: 0, w: 700, h: 4 },
+    { x: 0, y: 4, w: 4, h: 800 },
+    { x: 4, y: 4, w: 500, h: 800 },
+  ]);
+  assert.deepEqual(result.recoverable, [{ x: 4, y: 4, w: 500, h: 800 }]);
+  assert.equal(result.bladeWasteArea, 700 * 4 + 4 * 800);
+});
+
+test('快切：严格矩形块切会保留 4mm 刀片宽度并返回内部操作统计', () => {
+  const result = solve({
+    settings: { algorithm: 'fast', fastPreset: 'speed', slabs: [S('甲', 1200, 200, null)] },
+    parts: [P('A', 200, 100, 5, false)],
+  });
+  const slab = result.plans.A.slabs[0];
+  assert.deepEqual(slab.placements.map((p) => p.x), [0, 204, 408, 612, 816]);
+  assert.equal(slab.fastCut.preset, 'speed');
+  assert.equal(slab.fastCut.moveCount, 1);
+  assert.equal(slab.fastCut.cutCount, slab.fastCut.operations.length);
+  assert.ok(slab.fastCut.operations.every((op) => op.axis === 'H' || op.axis === 'V'));
+  assert.ok(slab.fastCut.operations.every((op) => op.order >= 1));
+  assert.ok(planGeometryValid(result.plans.A));
+});
+
+test('快切：末端容差允许 1200mm 母板利用最后一块短 4mm', () => {
+  const result = solve({
+    settings: { algorithm: 'fast', fastPreset: 'balanced', slabs: [S('甲', 1200, 200, null)] },
+    parts: [P('A', 200, 100, 6, false)],
+  });
+  assert.deepEqual(result.plans.A.slabs.map((s) => s.placements.length), [6]);
+  assert.ok(result.plans.A.slabs[0].placements.some((p) => p.terminal && p.shortage === 4));
+  assert.ok(planGeometryValid(result.plans.A));
+});
+
+test('快切：同一贯穿刀线只有完全相同的方向、位置和长度才合并', () => {
+  const same = mergeFastCuts([
+    { x1: 0, y1: 100, x2: 500, y2: 100 },
+    { x1: 0, y1: 100, x2: 500, y2: 100 },
+  ]);
+  const different = mergeFastCuts([
+    { x1: 0, y1: 100, x2: 500, y2: 100 },
+    { x1: 0, y1: 100, x2: 501, y2: 100 },
+  ]);
+  assert.equal(same.length, 1);
+  assert.equal(different.length, 2);
+});
+
+test('快切：分割方向始终产生矩形子块，且子块之间预留 4mm', () => {
+  const split = splitFastRegion(
+    { x: 0, y: 0, w: 1200, h: 800 },
+    { id: 'A', instance: 'A-1', w: 400, h: 300 },
+    'V',
+  );
+  assert.ok(split);
+  assert.deepEqual(split.placement, { id: 'A', instance: 'A-1', x: 0, y: 0, w: 400, h: 300 });
+  assert.ok(split.regions.every((r) => r.w > 0 && r.h > 0));
+  const right = split.regions.find((r) => r.x > 0);
+  const bottom = split.regions.find((r) => r.y > 0 && r.x === 0);
+  assert.equal(right.x, 404);
+  assert.equal(bottom.y, 304);
+});
+
+test('快切：相同尺寸按一个批次连续排放，不在中间插入其他尺寸', () => {
+  const result = solve({
+    settings: { algorithm: 'fast', fastPreset: 'balanced', slabs: [S('甲', 1800, 1000, null)] },
+    parts: [P('A', 400, 300, 2, false), P('B', 400, 300, 2, false), P('C', 500, 500, 1, false)],
+  });
+  const ids = result.plans.A.slabs[0].placements.map((p) => p.id);
+  const sameSize = ids.filter((id) => id === 'A' || id === 'B');
+  assert.deepEqual(sameSize, ['A', 'A', 'B', 'B']);
+  assert.ok(planGeometryValid(result.plans.A));
 });
