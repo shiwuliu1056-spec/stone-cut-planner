@@ -14,6 +14,8 @@ const { importParts, exportWorkbook, exportWord } = require('./src/workbook');
 const { solve } = require('./src/solver');
 const { checkForUpdate, startApply, progress: getUpdateProgress } = require('./src/updater');
 const { recognizePhoto } = require('./src/gemini-ocr');
+const { downloadHttps, imageMimeFromBuffer } = require('./src/remote');
+const { SolveTaskManager } = require('./src/solve-tasks');
 
 // ── 请求体大小限制（字节） ────────────────────────────────────────────────
 const LIMITS = {
@@ -22,6 +24,7 @@ const LIMITS = {
   export: 60 * 1024 * 1024,       // 含排版渲染图 Base64，体积较大
   exportWord: 60 * 1024 * 1024,
   photoOcr: 22 * 1024 * 1024,
+  remoteTimeoutMs: Math.max(5000, Number(process.env.REMOTE_DOWNLOAD_TIMEOUT_MS) || 60000),
 };
 
 // ── CORS ──────────────────────────────────────────────────────────────────
@@ -129,6 +132,14 @@ async function handleImport(req, res) {
   sendJson(res, 200, { parts });
 }
 
+async function handleImportUrl(req, res) {
+  const body = await readJsonBody(req, LIMITS.solve);
+  if (!body || typeof body.url !== 'string') { sendError(res, 400, '缺少文件地址'); return; }
+  const remote = await downloadHttps(body.url, LIMITS.import, LIMITS.remoteTimeoutMs);
+  const parts = await importParts(remote.buffer);
+  sendJson(res, 200, { parts });
+}
+
 async function handlePhotoOcr(req, res) {
   const body = await readJsonBody(req, LIMITS.photoOcr);
   if (!body || typeof body.image !== 'string') {
@@ -136,6 +147,17 @@ async function handlePhotoOcr(req, res) {
     return;
   }
   const result = await recognizePhoto({ image: body.image, unit: body.unit });
+  sendJson(res, 200, result);
+}
+
+async function handlePhotoOcrUrl(req, res) {
+  const body = await readJsonBody(req, LIMITS.solve);
+  if (!body || typeof body.url !== 'string') { sendError(res, 400, '缺少图片地址'); return; }
+  const remote = await downloadHttps(body.url, LIMITS.photoOcr, LIMITS.remoteTimeoutMs);
+  const mime = imageMimeFromBuffer(remote.buffer);
+  if (!mime) { sendError(res, 400, '远程文件不是支持的图片格式'); return; }
+  const image = `data:${mime};base64,${remote.buffer.toString('base64')}`;
+  const result = await recognizePhoto({ image, unit: body.unit });
   sendJson(res, 200, result);
 }
 
@@ -152,6 +174,28 @@ async function handleSolve(req, res) {
   } catch (err) {
     sendError(res, 400, err.message || String(err));
   }
+}
+
+async function handleSolveSubmit(req, res, solveTasks) {
+  const body = await readJsonBody(req, LIMITS.solve);
+  const invalidReason = validateSolveRequest(body);
+  if (invalidReason) { sendError(res, 400, invalidReason); return; }
+  const key = req.headers['idempotency-key'] || body.idempotencyKey || '';
+  const { task, reused } = solveTasks.submit({ settings: body.settings, parts: body.parts }, key);
+  sendJson(res, reused ? 200 : 202, {
+    taskId: task.taskId, status: task.status, progress: task.progress,
+    createdAt: task.createdAt, expiresAt: task.expiresAt, reused,
+  });
+}
+
+function handleSolveStatus(req, res, solveTasks, taskId) {
+  const task = solveTasks.get(taskId);
+  if (!task) { sendError(res, 404, '排版任务不存在或已过期'); return; }
+  const response = { taskId: task.taskId, status: task.status, progress: task.progress,
+    createdAt: task.createdAt, updatedAt: task.updatedAt, expiresAt: task.expiresAt };
+  if (task.status === 'succeeded') response.result = task.result;
+  if (task.status === 'failed') response.error = task.error;
+  sendJson(res, 200, response);
 }
 
 async function handleExport(req, res) {
@@ -192,11 +236,14 @@ function handleUpdateProgress(req, res) {
 }
 
 // ── 路由表：method + pathname -> handler ────────────────────────────────
-function buildRoutes(server, exit) {
+function buildRoutes(server, exit, solveTasks) {
   return [
     { method: 'POST', path: '/api/import', handler: handleImport },
+    { method: 'POST', path: '/api/import-url', handler: handleImportUrl },
     { method: 'POST', path: '/api/ocr/photo', handler: handlePhotoOcr },
+    { method: 'POST', path: '/api/ocr/photo-url', handler: handlePhotoOcrUrl },
     { method: 'POST', path: '/api/solve', handler: handleSolve },
+    { method: 'POST', path: '/api/solve/tasks', handler: (req, res) => handleSolveSubmit(req, res, solveTasks) },
     { method: 'POST', path: '/api/export', handler: handleExport },
     { method: 'POST', path: '/api/export-word', handler: handleExportWord },
     { method: 'POST', path: '/api/shutdown', handler: (req, res) => handleShutdown(req, res, server, exit) },
@@ -209,14 +256,15 @@ function buildRoutes(server, exit) {
 /**
  * 创建 HTTP 服务实例。
  *
- * @param {{exit?: () => void, webHandler?: (req, res, parsedUrl) => Promise<void>}} options
+ * @param {{exit?: () => void, webHandler?: (req, res, parsedUrl) => Promise<void>, solveTaskOptions?: object}} options
  *   exit: /api/shutdown 触发关闭后调用的函数，默认调用 process.exit(0)。
  *         测试环境可注入自定义函数以避免真正终止测试进程。
  *   webHandler: 处理「非 /api」请求（前端页面/静态资源）的处理器。
  *         未提供时（如后端单元测试），非 API 路由按 404 处理，行为与集成前一致。
  * @returns {http.Server}
  */
-function createServer({ exit = () => process.exit(0), webHandler = null } = {}) {
+function createServer({ exit = () => process.exit(0), webHandler = null, solveTaskOptions = {} } = {}) {
+  const solveTasks = new SolveTaskManager(solveTaskOptions);
   const server = http.createServer(async (req, res) => {
     let url;
     try {
@@ -250,7 +298,12 @@ function createServer({ exit = () => process.exit(0), webHandler = null } = {}) 
       return;
     }
 
-    const routes = buildRoutes(server, exit);
+    const taskMatch = url.pathname.match(/^\/api\/solve\/tasks\/([^/]+)$/);
+    if (req.method === 'GET' && taskMatch) {
+      handleSolveStatus(req, res, solveTasks, decodeURIComponent(taskMatch[1]));
+      return;
+    }
+    const routes = buildRoutes(server, exit, solveTasks);
     const route = routes.find((r) => r.method === req.method && r.path === url.pathname);
 
     if (!route) {
@@ -270,6 +323,8 @@ function createServer({ exit = () => process.exit(0), webHandler = null } = {}) 
       sendError(res, status, (error && error.message) || String(error));
     }
   });
+  server.solveTasks = solveTasks;
+  server.on('close', () => solveTasks.close());
   return server;
 }
 
@@ -293,12 +348,14 @@ if (require.main === module) {
 
   const server = createServer({ webHandler: webHandler.handle });
   const port = Number(process.env.PORT) || 3000;
+  const host = process.env.HOST || '127.0.0.1';
 
   webHandler.ready
     .then(() => {
-      server.listen(port, '127.0.0.1', () => {
+      server.listen(port, host, () => {
         const address = server.address();
-        const url = `http://127.0.0.1:${address.port}/`;
+        const displayHost = host === '0.0.0.0' ? '127.0.0.1' : host;
+        const url = `http://${displayHost}:${address.port}/`;
         process.stdout.write(`石材下料工具已启动：${url}\n`);
         process.stdout.write('（前端与后端已合并为同一服务，按 Ctrl+C 退出）\n');
       });

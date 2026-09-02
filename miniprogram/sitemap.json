@@ -1,0 +1,17 @@
+{
+  "desc": "石材下料规划工具轻量版 sitemap",
+  "rules": [
+    {
+      "action": "allow",
+      "page": "pages/index/index"
+    },
+    {
+      "action": "allow",
+      "page": "pages/ocr-review/ocr-review"
+    },
+    {
+      "action": "allow",
+      "page": "pages/result/result"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+<view class="page-shell">
+  <view class="hero-card">
+    <view>
+      <view class="eyebrow">STONE CUT PLANNER</view>
+      <view class="hero-title">宝松石材下料工具</view>
+      <view class="hero-subtitle">录入尺寸，生成清晰排版图</view>
+    </view>
+    <text class="ui-icon hero-icon">▤</text>
+  </view>
+
+  <view wx:if="{{progressTask}}" class="progress-float" aria-label="正在处理">
+    <view class="progress-ring" style="background: conic-gradient(#c99352 {{progress}}%, rgba(201, 147, 82, 0.16) 0);">
+      <view class="progress-ring-inner"><text class="progress-number">{{progress}}</text><text class="progress-total">/100</text></view>
+    </view>
+    <view class="progress-copy">
+      <view class="progress-title">{{progressTask === 'ocr' ? '拍照识别' : progressTask === 'import' ? '导入表格' : progressTask === 'fast' ? '快切' : '标准排版'}}</view>
+      <view class="muted">正在处理，请稍候…</view>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-title">
+      <view>大板</view>
+      <view class="section-title-actions">
+        <view class="spec-tag">{{project.slabs.length}} 种规格</view>
+        <text class="text-action" bindtap="resetDefault">恢复默认</text>
+      </view>
+    </view>
+    <block wx:for="{{project.slabs}}" wx:key="id" wx:for-item="slab" wx:for-index="index">
+      <view class="item-card">
+        <view class="item-heading">
+          <view class="item-label">{{slab.id}}板</view>
+          <text class="delete-action" data-index="{{index}}" bindtap="removeSlab">删除</text>
+        </view>
+        <view class="field-grid two-columns">
+          <view class="field-wrap">
+            <text class="field-label">长度</text>
+            <view class="number-field"><input type="number" value="{{slab.w}}" data-index="{{index}}" data-field="w" bindblur="updateSlab" /><text>mm</text></view>
+          </view>
+          <view class="field-wrap">
+            <text class="field-label">宽度</text>
+            <view class="number-field"><input type="number" value="{{slab.h}}" data-index="{{index}}" data-field="h" bindblur="updateSlab" /><text>mm</text></view>
+          </view>
+        </view>
+        <view class="limit-row">
+          <text class="field-label">可用数量</text>
+          <picker mode="selector" range="{{slabLimits}}" value="{{slab.limit || 0}}" data-index="{{index}}" bindchange="updateSlabLimit">
+            <view class="picker-value">{{slab.limit === null ? '不限' : slab.limit + ' 张'}} <text class="ui-icon chevron-icon">⌄</text></view>
+          </picker>
+        </view>
+      </view>
+    </block>
+    <view class="add-row" bindtap="addSlab"><text class="ui-icon add-icon">＋</text> 添加大板</view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-title"><view>小料清单</view><view class="section-title-actions"><view class="summary-badge">{{summary.totalCount}} 件 · {{summary.totalArea}}㎡</view><text class="text-action" bindtap="resetPartsDefault">恢复默认</text></view></view>
+    <block wx:for="{{project.parts}}" wx:key="id" wx:for-item="part" wx:for-index="index">
+      <view class="item-card part-card">
+        <view class="item-heading"><view class="item-label">{{part.id}}</view><text class="delete-action" data-index="{{index}}" bindtap="removePart">删除</text></view>
+        <view class="field-grid three-columns">
+          <view class="field-wrap"><text class="field-label">长度</text><view class="number-field compact"><input type="number" value="{{part.w}}" data-index="{{index}}" data-field="w" bindblur="updatePart" /><text>mm</text></view></view>
+          <view class="field-wrap"><text class="field-label">宽度</text><view class="number-field compact"><input type="number" value="{{part.h}}" data-index="{{index}}" data-field="h" bindblur="updatePart" /><text>mm</text></view></view>
+          <view class="field-wrap"><text class="field-label">数量</text><view class="number-field compact"><input type="number" value="{{part.qty}}" data-index="{{index}}" data-field="qty" bindblur="updatePart" /><text>件</text></view></view>
+        </view>
+      </view>
+    </block>
+    <view class="add-row" bindtap="addPart"><text class="ui-icon add-icon">＋</text> 添加小料</view>
+    <view class="import-actions">
+      <button class="secondary-action" bindtap="choosePhoto" loading="{{ocrBusy}}" disabled="{{busy}}"><text class="ui-icon camera-icon">▣</text> 拍照识别</button>
+      <button class="secondary-action" bindtap="chooseExcel" loading="{{importing}}" disabled="{{busy}}"><text class="ui-icon file-icon">▧</text> 导入表格</button>
+    </view>
+  </view>
+
+  <view class="section-card compact-section">
+    <view class="section-title">排版方式</view>
+    <view class="algorithm-row">
+      <view class="algorithm-option {{project.algorithm === 'standard' ? 'active' : ''}}" data-algorithm="standard" bindtap="setAlgorithm"><view class="algorithm-name">标准排版</view><view class="muted">尽量利用材料</view></view>
+      <view class="algorithm-option {{project.algorithm === 'fast' ? 'active' : ''}}" data-algorithm="fast" bindtap="setAlgorithm"><view class="algorithm-name">快切</view><view class="muted">减少现场搬动</view></view>
+    </view>
+    <view class="preset-slot {{project.algorithm === 'fast' ? 'active' : ''}}">
+      <picker mode="selector" range="{{fastPresetLabels}}" value="{{project.fastPreset === 'material' ? 0 : project.fastPreset === 'speed' ? 2 : 1}}" disabled="{{project.algorithm !== 'fast'}}" bindchange="setFastPreset"><view class="preset-picker">快切偏好：{{project.fastPreset === 'material' ? '节省材料' : project.fastPreset === 'speed' ? '优先快切' : '平衡'}} <text class="ui-icon chevron-icon">⌄</text></view></picker>
+    </view>
+  </view>
+
+  <button class="primary-action" bindtap="handleSolve" loading="{{solving}}" disabled="{{busy}}">开始排版 <text class="ui-icon arrow-icon">→</text></button>
+</view>

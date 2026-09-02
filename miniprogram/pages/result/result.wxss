@@ -1,0 +1,24 @@
+.result-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24rpx; padding: 4rpx; }
+.eyebrow { margin-bottom: 10rpx; color: #c99352; font-size: 20rpx; letter-spacing: 3rpx; }
+.page-title { color: var(--color-primary); font-size: 42rpx; font-weight: 700; }
+.stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; margin-bottom: 24rpx; }
+.stat-card { padding: 22rpx; border: 1rpx solid rgba(23, 62, 56, 0.08); border-radius: 18rpx; background: #fff; box-shadow: 0 8rpx 24rpx rgba(23, 62, 56, 0.05); }
+.stat-label { color: var(--color-muted); font-size: 22rpx; }
+.stat-value { margin-top: 8rpx; color: var(--color-primary); font-size: 44rpx; font-weight: 700; }
+.stat-value.small { font-size: 34rpx; }
+.canvas-card { padding: 24rpx 20rpx 20rpx; }
+.canvas-title { display: flex; align-items: center; justify-content: space-between; margin: 0 8rpx 18rpx; }
+.canvas-viewport { position: relative; width: 100%; overflow: hidden; border-radius: 14rpx; background: #f0f2f0; }
+.slab-canvas { display: block; width: 100%; height: 61vw; }
+.preview-hint { position: absolute; right: 14rpx; bottom: 12rpx; padding: 8rpx 14rpx; border-radius: 20rpx; background: rgba(23, 62, 56, 0.72); color: #fff; font-size: 20rpx; pointer-events: none; }
+.legend { display: flex; justify-content: flex-end; gap: 30rpx; margin: 18rpx 8rpx; color: #62716c; font-size: 22rpx; }
+.legend-dot { display: inline-block; width: 18rpx; height: 18rpx; margin-right: 8rpx; border: 2rpx solid #334956; border-radius: 4rpx; vertical-align: -2rpx; }
+.legend-dot.product { background: #c4d0df; }
+.legend-dot.offcut { border-color: #c53d36; background: #fde2e1; }
+.slab-nav { display: flex; box-sizing: border-box; width: 100%; overflow: hidden; border: 1rpx solid rgba(23, 62, 56, 0.18); border-radius: 14rpx; background: #fff; }
+.nav-button { flex: 1; min-width: 0; box-sizing: border-box; height: 72rpx; margin: 0; padding: 0; border: 0; border-radius: 0; background: #fff; color: var(--color-primary); font-size: 24rpx; line-height: 72rpx; }
+.nav-button + .nav-button { border-left: 1rpx solid rgba(23, 62, 56, 0.14); }
+.nav-button[disabled] { color: #adb6b2; background: #f4f5f3; }
+.primary-action { display: flex; align-items: center; justify-content: center; gap: 10rpx; }
+.save-action { box-sizing: border-box; width: 100%; }
+.save-action-busy { opacity: 0.58; }

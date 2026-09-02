@@ -500,3 +500,15 @@ test('快切：相同尺寸按一个批次连续排放，不在中间插入其�
   assert.deepEqual(sameSize, ['A', 'A', 'B', 'B']);
   assert.ok(planGeometryValid(result.plans.A));
 });
+
+test('标准排版：64 件批量输入在移动端可接受时间内完成', { timeout: 15000 }, () => {
+  const parts = [
+    P('F', 130, 30, 8, true), P('E', 140, 31, 9, true), P('D', 150, 32, 10, true),
+    P('C', 160, 33, 11, true), P('B', 170, 34, 12, true), P('A', 180, 35, 14, true),
+  ];
+  const started = Date.now();
+  const result = solve({ settings: { algorithm: 'standard', slabs: [S('甲', 2700, 1800)] }, parts });
+  assert.ok(Date.now() - started < 10000);
+  assert.ok(result.plans.A.slabs.length > 0);
+  assert.equal(allPlacements(result.plans.A).length, 64);
+});

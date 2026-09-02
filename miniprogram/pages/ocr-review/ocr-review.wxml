@@ -1,0 +1,30 @@
+<view class="page-shell">
+  <view class="review-head">
+    <view>
+      <view class="eyebrow">PHOTO OCR</view>
+      <view class="page-title">拍照识别</view>
+      <view class="muted">请核对识别结果，再加入清单 · 识别单位 {{unit}}，已换算为 mm</view>
+    </view>
+    <text class="ui-icon check-icon">✓</text>
+  </view>
+
+  <view class="photo-card" wx:if="{{imagePath}}"><image src="{{imagePath}}" mode="aspectFit" /></view>
+
+  <view class="notice"><text class="ui-icon info-icon">i</text><text>识别只作辅助，请确认每一行尺寸和数量。</text></view>
+
+  <view class="section-card">
+    <view class="section-title"><view>识别结果</view><view class="summary-badge">{{rows.length}} 条</view></view>
+    <block wx:for="{{rows}}" wx:key="_key" wx:for-item="row" wx:for-index="index">
+      <view class="ocr-row">
+        <view class="ocr-row-head"><text>第 {{index + 1}} 条</text><text class="delete-action" data-index="{{index}}" bindtap="removeRow">删除</text></view>
+        <view class="field-grid three-columns">
+          <view class="field-wrap"><text class="field-label">长度</text><view class="number-field compact"><input type="number" value="{{row.w}}" data-index="{{index}}" data-field="w" bindblur="updateRow" /><text>mm</text></view></view>
+          <view class="field-wrap"><text class="field-label">宽度</text><view class="number-field compact"><input type="number" value="{{row.h}}" data-index="{{index}}" data-field="h" bindblur="updateRow" /><text>mm</text></view></view>
+          <view class="field-wrap"><text class="field-label">数量</text><view class="number-field compact"><input type="number" value="{{row.qty}}" data-index="{{index}}" data-field="qty" bindblur="updateRow" /><text>件</text></view></view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <button class="primary-action accent-action" bindtap="confirmImport" loading="{{saving}}" disabled="{{saving}}">加入清单 <text class="ui-icon arrow-icon">→</text></button>
+</view>

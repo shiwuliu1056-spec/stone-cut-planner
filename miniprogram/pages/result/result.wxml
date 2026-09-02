@@ -1,0 +1,22 @@
+<view class="page-shell result-page">
+  <view class="result-head">
+    <view><view class="eyebrow">LAYOUT RESULT</view><view class="page-title">排版结果</view><view class="muted">网页版同款排版图 · 刀片宽度 4mm</view></view>
+    <text class="ui-icon check-icon">✓</text>
+  </view>
+
+  <view class="stats-grid" wx:if="{{stats}}">
+    <view class="stat-card"><view class="stat-label">母板数量</view><view class="stat-value">{{stats.slabCount}}</view></view>
+    <view class="stat-card"><view class="stat-label">出材率</view><view class="stat-value">{{productRateText}}</view></view>
+    <view class="stat-card"><view class="stat-label">余料块数</view><view class="stat-value">{{stats.offcutCount}}</view></view>
+    <view class="stat-card"><view class="stat-label">余料总面积</view><view class="stat-value small">{{offcutAreaText}}</view></view>
+  </view>
+
+  <view class="section-card canvas-card" wx:if="{{plan && plan.slabs && plan.slabs.length}}">
+    <view class="canvas-title"><view><view class="item-label">{{plan.slabs[slabIndex].id}}板 {{plan.slabs[slabIndex].index}}</view><view class="muted">{{plan.slabs[slabIndex].w}} × {{plan.slabs[slabIndex].h}} mm · {{plan.slabs[slabIndex].placements.length}} 件</view></view><view class="muted">{{slabIndex + 1}} / {{plan.slabs.length}}</view></view>
+    <view class="canvas-viewport" bindtap="previewImage"><canvas type="2d" id="slab-canvas" canvas-id="slab-canvas" class="slab-canvas"></canvas><view class="preview-hint">点击画布查看大图</view></view>
+    <view class="legend"><view><text class="legend-dot product"></text>成品</view><view><text class="legend-dot offcut"></text>余料</view></view>
+    <view class="slab-nav"><button class="nav-button" bindtap="previousSlab" disabled="{{slabIndex === 0}}">上一张</button><button class="nav-button" bindtap="nextSlab" disabled="{{slabIndex === plan.slabs.length - 1}}">下一张</button></view>
+  </view>
+
+  <view class="primary-action accent-action save-action {{saving ? 'save-action-busy' : ''}}" bindtap="saveImage"><text class="ui-icon download-icon">⇩</text><text>{{saving ? '正在生成图片…' : '保存排版图片'}}</text></view>
+</view>

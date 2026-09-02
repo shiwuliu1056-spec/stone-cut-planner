@@ -11,13 +11,17 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const ExcelJS = require('exceljs');
 const { createServer } = require('../server');
+const { SolveTaskManager } = require('../src/solve-tasks');
 
 /** 启动一个新的 server 实例，监听随机端口，返回 { server, baseUrl }。 */
 function startServer(options) {
   return new Promise((resolve, reject) => {
-    const server = createServer(options);
+    const server = createServer({ solveTaskOptions: { storageFile: null }, ...options });
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       resolve({ server, baseUrl: `http://127.0.0.1:${port}` });
@@ -156,6 +160,118 @@ test('POST /api/solve 合法参数返回 200 且 result.plans.A 结构符合契�
   } finally {
     await stopServer(server);
   }
+});
+
+test('POST /api/solve/tasks 异步提交并可查询到完成结果', async () => {
+  const { server, baseUrl } = await startServer();
+  try {
+    const payload = { settings: { slabs: [{ id: '甲', w: 1200, h: 500, limit: null }] },
+      parts: [{ id: 'A', w: 200, h: 100, qty: 5, rotatable: false }] };
+    const submitted = await fetch(`${baseUrl}/api/solve/tasks`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'async-test-1' }, body: JSON.stringify(payload),
+    });
+    assert.equal(submitted.status, 202);
+    const first = await submitted.json();
+    assert.match(first.taskId, /^[0-9a-f-]{36}$/);
+    assert.ok(['queued', 'running'].includes(first.status));
+    let state;
+    for (let i = 0; i < 30; i += 1) {
+      const response = await fetch(`${baseUrl}/api/solve/tasks/${first.taskId}`);
+      state = await response.json();
+      if (state.status === 'succeeded') break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(state.status, 'succeeded');
+    assert.equal(state.progress, 100);
+    assert.ok(state.result.plans.A);
+  } finally { await stopServer(server); }
+});
+
+test('异步排版使用 Idempotency-Key 重复提交返回同一任务', async () => {
+  const { server, baseUrl } = await startServer();
+  try {
+    const payload = { settings: { slabs: [{ id: '甲', w: 1000, h: 500, limit: null }] }, parts: [{ id: 'A', w: 200, h: 100, qty: 1 }] };
+    const send = () => fetch(`${baseUrl}/api/solve/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'same-task' }, body: JSON.stringify(payload) });
+    const a = await (await send()).json();
+    const bRes = await send(); const b = await bRes.json();
+    assert.equal(bRes.status, 200);
+    assert.equal(b.reused, true);
+    assert.equal(b.taskId, a.taskId);
+  } finally { await stopServer(server); }
+});
+
+test('查询不存在的异步任务返回 404', async () => {
+  const { server, baseUrl } = await startServer();
+  try {
+    const res = await fetch(`${baseUrl}/api/solve/tasks/not-found`);
+    assert.equal(res.status, 404);
+  } finally { await stopServer(server); }
+});
+
+test('异步任务队列达到上限返回 429', async () => {
+  const { server, baseUrl } = await startServer({ solveTaskOptions: { storageFile: null, maxWorkers: 1, maxQueue: 0 } });
+  try {
+    const res = await fetch(`${baseUrl}/api/solve/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings: { slabs: [] }, parts: [] }) });
+    assert.equal(res.status, 429);
+  } finally { await stopServer(server); }
+});
+
+test('任务 TTL 到期会移除任务和幂等索引', async () => {
+  const manager = new SolveTaskManager({ storageFile: null, ttlMs: 15, maxQueue: 1 });
+  const payload = { settings: { slabs: [] }, parts: [] };
+  const { task } = manager.submit(payload, 'ttl-key');
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(manager.get(task.taskId), null);
+  assert.equal(manager.idempotency.has('ttl-key'), false);
+  manager.close();
+});
+
+test('关闭任务管理器会清理定时器和 worker 状态', () => {
+  const manager = new SolveTaskManager({ storageFile: null });
+  manager.close();
+  assert.equal(manager.closed, true);
+  assert.equal(manager.timeouts.size, 0);
+  assert.equal(manager.workers.size, 0);
+});
+
+test('worker 超时会将异步任务标记为失败', async () => {
+  const manager = new SolveTaskManager({ storageFile: null, timeoutMs: 20 });
+  const { task } = manager.submit({ __delayMs: 200, settings: { slabs: [] }, parts: [] });
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(manager.get(task.taskId).status, 'failed');
+  assert.match(manager.get(task.taskId).error, /超时/);
+  manager.close();
+});
+
+test('持久化恢复会中断 queued/running、恢复幂等索引并跳过过期任务', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'solve-task-')), 'tasks.json');
+  const now = Date.now();
+  fs.writeFileSync(file, JSON.stringify([
+    { taskId: 'queued-1', status: 'queued', progress: 0, createdAt: now, updatedAt: now, expiresAt: now + 10000, inputHash: 'a', idempotencyKey: 'key-1' },
+    { taskId: 'running-1', status: 'running', progress: 10, createdAt: now, updatedAt: now, expiresAt: now + 10000, inputHash: 'b', idempotencyKey: 'key-2' },
+    { taskId: 'expired-1', status: 'succeeded', progress: 100, expiresAt: now - 1, inputHash: 'c', idempotencyKey: 'key-3' },
+  ]));
+  const manager = new SolveTaskManager({ storageFile: file });
+  assert.equal(manager.get('queued-1').status, 'failed');
+  assert.equal(manager.get('running-1').status, 'failed');
+  assert.equal(manager.get('expired-1'), null);
+  assert.equal(manager.idempotency.get('key-1'), 'queued-1');
+  manager.close();
+  fs.rmSync(path.dirname(file), { recursive: true, force: true });
+});
+
+test('结果超限会删除结果字段且持久化文件不包含大结果', async () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'solve-result-')), 'tasks.json');
+  const manager = new SolveTaskManager({ storageFile: file, maxResultBytes: 1024 });
+  const { task } = manager.submit({ settings: { algorithm: 'fast', slabs: [{ id: '甲', w: 1200, h: 500, limit: null }] }, parts: [{ id: 'A', w: 200, h: 100, qty: 20 }] });
+  for (let i = 0; i < 150 && !['succeeded', 'failed'].includes(manager.get(task.taskId)?.status); i += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+  const state = manager.get(task.taskId);
+  assert.equal(state.status, 'failed');
+  assert.equal(state.result, undefined);
+  manager.close();
+  const stored = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(stored[0].result, undefined);
+  fs.rmSync(path.dirname(file), { recursive: true, force: true });
 });
 
 test('POST /api/solve algorithm=fast 返回快切统计且不改变标准接口主结构', async () => {

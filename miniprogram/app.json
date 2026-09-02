@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/ocr-review/ocr-review",
+    "pages/result/result"
+  ],
+  "window": {
+    "navigationBarTitleText": "宝松石材下料工具",
+    "navigationBarBackgroundColor": "#173e38",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f7f5f0",
+    "backgroundTextStyle": "light"
+  },
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

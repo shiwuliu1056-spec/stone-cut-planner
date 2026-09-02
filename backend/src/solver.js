@@ -458,7 +458,8 @@ function searchGroupLayout(W, H, frozen, group, budget) {
   let bestKey = null;
 
   function dfs(depth, current) {
-    if (budget.states > MAX_SEARCH_STATES) return;
+    const maxStates = budget.maxStates || MAX_SEARCH_STATES;
+    if (budget.states > maxStates) return;
     if (depth === group.instances.length) {
       const all = [...frozen, ...current];
       const metrics = layoutMetrics(W, H, all);
@@ -482,7 +483,7 @@ function searchGroupLayout(W, H, frozen, group, budget) {
       });
       dfs(depth + 1, current);
       current.pop();
-      if (budget.states > MAX_SEARCH_STATES && best !== null) break;
+      if (budget.states > maxStates && best !== null) break;
     }
   }
 
@@ -672,7 +673,10 @@ function solveStandard({ settings, parts }) {
 
   const usage = new Map(slabTypes.map((s) => [s, 0]));
   const namer = makeSlabNamer(slabTypes);
-  const budget = { states: 0 };
+  const totalPieces = parts.reduce((sum, item) => sum + item.qty, 0);
+  // 大批量标准排版仍沿用同一确定性搜索，但降低搜索预算，避免移动端请求长时间阻塞。
+  // 小批量保持原有预算和结果质量。
+  const budget = { states: 0, maxStates: totalPieces > 40 ? 20000 : MAX_SEARCH_STATES };
 
   const planSlabs = [];
   const stats = { slabCount: 0, offcutCount: 0, offcutArea: 0, kerfWasteArea: 0 };

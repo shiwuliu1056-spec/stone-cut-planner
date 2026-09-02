@@ -1,0 +1,15 @@
+.review-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24rpx; padding: 4rpx 4rpx 8rpx; }
+.eyebrow { margin-bottom: 10rpx; color: #c99352; font-size: 20rpx; letter-spacing: 3rpx; }
+.page-title { color: var(--color-primary); font-size: 42rpx; font-weight: 700; }
+.photo-card { display: flex; align-items: center; justify-content: center; height: 390rpx; margin-bottom: 20rpx; overflow: hidden; border: 1rpx solid rgba(23, 62, 56, 0.1); border-radius: 22rpx; background: #e8e2d7; }
+.photo-card image { width: 100%; height: 100%; }
+.notice { display: flex; align-items: center; gap: 12rpx; margin-bottom: 20rpx; padding: 20rpx 24rpx; border-radius: 16rpx; background: #fff5df; color: #9a6e31; font-size: 23rpx; }
+.ocr-row { margin-bottom: 16rpx; padding: 20rpx; border-radius: 16rpx; background: #fbfaf7; }
+.ocr-row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16rpx; color: var(--color-muted); font-size: 23rpx; }
+.field-grid { display: grid; gap: 12rpx; }
+.three-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.field-label { display: block; margin-bottom: 8rpx; color: var(--color-muted); font-size: 21rpx; }
+.number-field { display: flex; align-items: center; box-sizing: border-box; height: 72rpx; padding: 0 10rpx; border: 1rpx solid rgba(23, 62, 56, 0.14); border-radius: 12rpx; background: #fff; }
+.number-field input { flex: 1; min-width: 0; color: var(--color-text); font-size: 26rpx; font-weight: 600; }
+.number-field text { color: var(--color-muted); font-size: 20rpx; }
+.primary-action { display: flex; align-items: center; justify-content: center; gap: 10rpx; }
