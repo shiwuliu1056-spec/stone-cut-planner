@@ -329,9 +329,9 @@ function normalizeShortVideo(data) {
   const hasImages = detail && ((Array.isArray(detail.image_infos) && detail.image_infos.length > 0)
     || (Array.isArray(detail.images) && detail.images.length > 0));
   if (Number(detail && detail.aweme_type) === 68 || (!video && hasImages)) {
-    throw httpError('该作品是图文内容，没有可下载的视频或语音', 400);
+    throw httpError('该作品被上游标记为图文，没有可下载的视频或语音', 400);
   }
-  if (!video) throw httpError('未找到该作品的视频文件，请检查链接后重试', 502);
+  if (!video) throw httpError('上游返回的作品数据没有视频媒体字段', 502);
   const bitrate = Array.isArray(video.bit_rate) ? [...video.bit_rate].sort((a, b) => Number(b.bit_rate || 0) - Number(a.bit_rate || 0)) : [];
   const candidates = [
     video.download_no_watermark_addr, video.downloadNoWatermarkAddr,
@@ -341,7 +341,7 @@ function normalizeShortVideo(data) {
     video.play_addr_265, video.playAddr265,
   ];
   const videoUrl = candidates.map((candidate) => firstMediaUrl(candidate)).find(Boolean) || '';
-  if (!videoUrl) throw httpError('视频地址暂时无法获取，请稍后重试', 502);
+  if (!videoUrl) throw httpError('上游返回的视频数据没有可用的 HTTPS 视频地址', 502);
   return {
     durationMs: Math.max(0, Number(video.duration) || 0),
     videoUrl,
@@ -401,9 +401,9 @@ function findDurationMs(root) {
 function normalizeXiaohongshu(data) {
   const candidates = collectVideoUrls(data);
   if (!candidates.length && xiaohongshuNoteType(data) === 'normal') {
-    throw httpError('该笔记是图文内容，没有可下载的视频或语音', 400);
+    throw httpError('该笔记被上游标记为图文，没有可下载的视频或语音', 400);
   }
-  if (!candidates.length) throw httpError('未找到该笔记的视频地址，请检查链接后重试', 502);
+  if (!candidates.length) throw httpError('上游返回的笔记数据未识别到视频地址', 502);
   return { durationMs: findDurationMs(data), videoUrl: candidates[0].url };
 }
 

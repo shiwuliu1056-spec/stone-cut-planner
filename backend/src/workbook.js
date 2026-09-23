@@ -20,6 +20,19 @@ const {
   AlignmentType, PageOrientation, VerticalAlign,
 } = require('docx');
 
+/**
+ * 构造「调用方输入有问题」的错误。
+ *
+ * workbook 的全部校验都是针对调用方传来的 Excel 二进制或导出 payload，
+ * 因此一律属于 400。server.js 只对带整数 statusCode 的错误原样返回中文文案，
+ * 否则统一回 500 通用提示（所以裸 Error 会变成 500）。
+ */
+function inputError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
 /** 把单元格表头值规范化为小写无空格字符串，方便同义词匹配。 */
 function normalizeHeader(value) {
   return String(value ?? '').trim().replace(/\s+/g, '').toLowerCase();
@@ -36,7 +49,7 @@ async function importParts(buffer) {
   // ── 1. 空文件检查 ─────────────────────────────────────────────────────────
   const byteLen = buffer?.byteLength ?? buffer?.length ?? 0;
   if (!buffer || byteLen === 0) {
-    throw new Error('文件内容为空');
+    throw inputError('文件内容为空');
   }
 
   // ── 2. 解析 Excel ─────────────────────────────────────────────────────────
@@ -44,13 +57,13 @@ async function importParts(buffer) {
   try {
     await wb.xlsx.load(buffer);
   } catch {
-    throw new Error('无法解析 Excel 文件，请确认文件格式正确（仅支持 .xlsx / .xls）');
+    throw inputError('无法解析 Excel 文件，请确认文件格式正确（仅支持 .xlsx / .xls）');
   }
 
   // ── 3. 工作表检查 ─────────────────────────────────────────────────────────
   const ws = wb.getWorksheet('尺寸清单') || wb.worksheets[0];
   if (!ws) {
-    throw new Error('Excel 文件中没有工作表');
+    throw inputError('Excel 文件中没有工作表');
   }
 
   // ── 4. 表头定位（在前 30 行中搜索含 w、h、qty 列的行） ───────────────────
@@ -82,7 +95,7 @@ async function importParts(buffer) {
   }
 
   if (!headerRowIndex) {
-    throw new Error('未找到表头行，请确认文件包含"长度、宽度、数量"列（也接受英文 w/h/qty）');
+    throw inputError('未找到表头行，请确认文件包含"长度、宽度、数量"列（也接受英文 w/h/qty）');
   }
 
   // ── 5. 逐行读取，校验并收集数据 ───────────────────────────────────────────
@@ -105,13 +118,13 @@ async function importParts(buffer) {
     // 逐字段校验：必须是正整数。禁止先接受小数再四舍五入，
     // 0.4、100.5 等非整数直接报错（与 /api/solve 对零件的整数要求保持一致）。
     if (!Number.isInteger(w) || w <= 0) {
-      throw new Error(`第 ${r} 行：长度值 "${rawW}" 不是有效的正整数`);
+      throw inputError(`第 ${r} 行：长度值 "${rawW}" 不是有效的正整数`);
     }
     if (!Number.isInteger(h) || h <= 0) {
-      throw new Error(`第 ${r} 行：宽度值 "${rawH}" 不是有效的正整数`);
+      throw inputError(`第 ${r} 行：宽度值 "${rawH}" 不是有效的正整数`);
     }
     if (!Number.isInteger(qty) || qty <= 0) {
-      throw new Error(`第 ${r} 行：数量值 "${rawQty}" 不是有效的正整数`);
+      throw inputError(`第 ${r} 行：数量值 "${rawQty}" 不是有效的正整数`);
     }
 
     // 编号：有列则取值，否则自动生成 P01、P02 …
@@ -124,7 +137,7 @@ async function importParts(buffer) {
 
   // ── 6. 确保至少有一条有效数据 ─────────────────────────────────────────────
   if (parts.length === 0) {
-    throw new Error('未读取到有效的小料数据，请检查数据行是否为空或全部被跳过');
+    throw inputError('未读取到有效的小料数据，请检查数据行是否为空或全部被跳过');
   }
 
   return parts;
@@ -425,7 +438,7 @@ function resolveResult(payload) {
 async function buildWorkbook(payload) {
   const result = resolveResult(payload);
   if (!result || !result.plans || !result.plans.A) {
-    throw new Error('缺少计算结果');
+    throw inputError('缺少计算结果');
   }
   // 导出前深度完整性校验：坐标/尺寸/越界/重叠/面积守恒/编号/数量。
   assertValidResultShape(result.plans.A);
@@ -472,17 +485,17 @@ function circledNumber(n) {
 /** 校验 result.plans.A 的基本结构是否合法（不依赖 solver，只做形状检查）。 */
 function assertValidResultShape(plan) {
   if (!Array.isArray(plan.slabs)) {
-    throw new Error('排版结果结构非法：plans.A.slabs 应为数组');
+    throw inputError('排版结果结构非法：plans.A.slabs 应为数组');
   }
   plan.slabs.forEach((slab, i) => {
     if (!slab || typeof slab !== 'object') {
-      throw new Error(`排版结果结构非法：第 ${i + 1} 块母板数据无效`);
+      throw inputError(`排版结果结构非法：第 ${i + 1} 块母板数据无效`);
     }
     if (!Number.isFinite(Number(slab.w)) || !Number.isFinite(Number(slab.h))) {
-      throw new Error(`排版结果结构非法：第 ${i + 1} 块母板缺少有效的 w/h`);
+      throw inputError(`排版结果结构非法：第 ${i + 1} 块母板缺少有效的 w/h`);
     }
     if (slab.placements !== undefined && !Array.isArray(slab.placements)) {
-      throw new Error(`排版结果结构非法：第 ${i + 1} 块母板 placements 应为数组`);
+      throw inputError(`排版结果结构非法：第 ${i + 1} 块母板 placements 应为数组`);
     }
   });
 }
@@ -511,7 +524,7 @@ function twoRectsOverlap(a, b) {
 function assertExportIntegrity(plan) {
   const slabs = plan.slabs;
   if (!Array.isArray(slabs) || slabs.length === 0) {
-    throw new Error('排版结果结构非法：plans.A.slabs 应为非空数组');
+    throw inputError('排版结果结构非法：plans.A.slabs 应为非空数组');
   }
   const seenIndex = new Set();
   let totalOffcutArea = 0;
@@ -520,50 +533,50 @@ function assertExportIntegrity(plan) {
 
   slabs.forEach((slab, si) => {
     const tag = `第 ${si + 1} 块母板`;
-    if (!slab || typeof slab !== 'object') throw new Error(`导出校验失败：${tag}数据无效`);
+    if (!slab || typeof slab !== 'object') throw inputError(`导出校验失败：${tag}数据无效`);
     if (slab.id == null || String(slab.id).trim() === '') {
-      throw new Error(`导出校验失败：${tag}缺少母板编号`);
+      throw inputError(`导出校验失败：${tag}缺少母板编号`);
     }
     if (!isPositiveInt(slab.w) || !isPositiveInt(slab.h)) {
-      throw new Error(`导出校验失败：${tag}(${slab.id}) 的宽高必须为正整数`);
+      throw inputError(`导出校验失败：${tag}(${slab.id}) 的宽高必须为正整数`);
     }
     if (!isPositiveInt(slab.index)) {
-      throw new Error(`导出校验失败：${tag}(${slab.id}) 的 index 必须为正整数`);
+      throw inputError(`导出校验失败：${tag}(${slab.id}) 的 index 必须为正整数`);
     }
     if (seenIndex.has(slab.index)) {
-      throw new Error(`导出校验失败：母板 index 重复：${slab.index}`);
+      throw inputError(`导出校验失败：母板 index 重复：${slab.index}`);
     }
     seenIndex.add(slab.index);
 
     const placements = slab.placements || [];
     const offcuts = slab.allOffcuts || [];
-    if (!Array.isArray(placements)) throw new Error(`导出校验失败：${tag} placements 应为数组`);
-    if (!Array.isArray(offcuts)) throw new Error(`导出校验失败：${tag} allOffcuts 应为数组`);
+    if (!Array.isArray(placements)) throw inputError(`导出校验失败：${tag} placements 应为数组`);
+    if (!Array.isArray(offcuts)) throw inputError(`导出校验失败：${tag} allOffcuts 应为数组`);
 
     const allRects = [];
     placements.forEach((p, pi) => {
-      if (!p || typeof p !== 'object') throw new Error(`导出校验失败：${tag}第 ${pi + 1} 个成品无效`);
-      if (typeof p.id !== 'string' || !p.id.trim()) throw new Error(`导出校验失败：${tag}成品缺少 id`);
+      if (!p || typeof p !== 'object') throw inputError(`导出校验失败：${tag}第 ${pi + 1} 个成品无效`);
+      if (typeof p.id !== 'string' || !p.id.trim()) throw inputError(`导出校验失败：${tag}成品缺少 id`);
       if (!isNonNegInt(p.x) || !isNonNegInt(p.y) || !isPositiveInt(p.w) || !isPositiveInt(p.h)) {
-        throw new Error(`导出校验失败：${tag}成品 ${p.id} 坐标或尺寸非法`);
+        throw inputError(`导出校验失败：${tag}成品 ${p.id} 坐标或尺寸非法`);
       }
       if (p.x + p.w > slab.w || p.y + p.h > slab.h) {
-        throw new Error(`导出校验失败：${tag}成品 ${p.id} 越出母板边界`);
+        throw inputError(`导出校验失败：${tag}成品 ${p.id} 越出母板边界`);
       }
       allRects.push({ ...p, kind: '成品', label: p.instance || p.id });
     });
 
     const seenOffcutId = new Set();
     offcuts.forEach((o, oi) => {
-      if (!o || typeof o !== 'object') throw new Error(`导出校验失败：${tag}第 ${oi + 1} 块空块无效`);
-      if (o.id == null || String(o.id).trim() === '') throw new Error(`导出校验失败：${tag}空块缺少编号`);
-      if (seenOffcutId.has(o.id)) throw new Error(`导出校验失败：${tag}空块编号重复：${o.id}`);
+      if (!o || typeof o !== 'object') throw inputError(`导出校验失败：${tag}第 ${oi + 1} 块空块无效`);
+      if (o.id == null || String(o.id).trim() === '') throw inputError(`导出校验失败：${tag}空块缺少编号`);
+      if (seenOffcutId.has(o.id)) throw inputError(`导出校验失败：${tag}空块编号重复：${o.id}`);
       seenOffcutId.add(o.id);
       if (!isNonNegInt(o.x) || !isNonNegInt(o.y) || !isPositiveInt(o.w) || !isPositiveInt(o.h)) {
-        throw new Error(`导出校验失败：${tag}空块 ${o.id} 坐标或尺寸非法`);
+        throw inputError(`导出校验失败：${tag}空块 ${o.id} 坐标或尺寸非法`);
       }
       if (o.x + o.w > slab.w || o.y + o.h > slab.h) {
-        throw new Error(`导出校验失败：${tag}空块 ${o.id} 越出母板边界`);
+        throw inputError(`导出校验失败：${tag}空块 ${o.id} 越出母板边界`);
       }
       allRects.push({ ...o, kind: '空块', label: o.id });
     });
@@ -572,7 +585,7 @@ function assertExportIntegrity(plan) {
     for (let i = 0; i < allRects.length; i += 1) {
       for (let j = i + 1; j < allRects.length; j += 1) {
         if (twoRectsOverlap(allRects[i], allRects[j])) {
-          throw new Error(
+          throw inputError(
             `导出校验失败：${tag}区域重叠（${allRects[i].kind}${allRects[i].label} 与 ${allRects[j].kind}${allRects[j].label}）`,
           );
         }
@@ -584,10 +597,10 @@ function assertExportIntegrity(plan) {
     const offArea = offcuts.reduce((s, o) => s + o.w * o.h, 0);
     const kerfArea = Number(slab.kerfWasteArea) || 0;
     if (!Number.isInteger(kerfArea) || kerfArea < 0) {
-      throw new Error(`导出校验失败：${tag}(${slab.id}) 刀片损耗面积非法`);
+      throw inputError(`导出校验失败：${tag}(${slab.id}) 刀片损耗面积非法`);
     }
     if (placedArea + offArea + kerfArea !== slab.w * slab.h) {
-      throw new Error(
+      throw inputError(
         `导出校验失败：${tag}(${slab.id}) 面积不守恒（成品${placedArea}+空块${offArea}+刀片损耗${kerfArea}≠母板${slab.w * slab.h}）`,
       );
     }
@@ -600,16 +613,16 @@ function assertExportIntegrity(plan) {
   const stats = plan.stats;
   if (stats && typeof stats === 'object') {
     if (stats.slabCount != null && stats.slabCount !== slabs.length) {
-      throw new Error(`导出校验失败：stats.slabCount(${stats.slabCount}) 与实际母板数(${slabs.length})不一致`);
+      throw inputError(`导出校验失败：stats.slabCount(${stats.slabCount}) 与实际母板数(${slabs.length})不一致`);
     }
     if (stats.offcutCount != null && stats.offcutCount !== totalOffcutCount) {
-      throw new Error(`导出校验失败：stats.offcutCount(${stats.offcutCount}) 与实际空块数(${totalOffcutCount})不一致`);
+      throw inputError(`导出校验失败：stats.offcutCount(${stats.offcutCount}) 与实际空块数(${totalOffcutCount})不一致`);
     }
     if (stats.offcutArea != null && Math.abs(Number(stats.offcutArea) - totalOffcutArea) > 1e-6) {
-      throw new Error(`导出校验失败：stats.offcutArea(${stats.offcutArea}) 与实际空块面积(${totalOffcutArea})不一致`);
+      throw inputError(`导出校验失败：stats.offcutArea(${stats.offcutArea}) 与实际空块面积(${totalOffcutArea})不一致`);
     }
     if (stats.kerfWasteArea != null && Math.abs(Number(stats.kerfWasteArea) - totalKerfWasteArea) > 1e-6) {
-      throw new Error(`导出校验失败：stats.kerfWasteArea(${stats.kerfWasteArea}) 与实际刀片损耗面积(${totalKerfWasteArea})不一致`);
+      throw inputError(`导出校验失败：stats.kerfWasteArea(${stats.kerfWasteArea}) 与实际刀片损耗面积(${totalKerfWasteArea})不一致`);
     }
   }
 }
@@ -622,20 +635,20 @@ function pngPixelSize(buffer) {
 /** 将 dataURL 解析为 Buffer，并校验其为合法的 PNG 图片格式。 */
 function decodePngDataUrl(dataUrl, label) {
   if (typeof dataUrl !== 'string') {
-    throw new Error(`图片格式错误：${label} 应为 data:image/png;base64,... 字符串`);
+    throw inputError(`图片格式错误：${label} 应为 data:image/png;base64,... 字符串`);
   }
   const match = PNG_DATA_URL_RE.exec(dataUrl.trim());
   if (!match) {
-    throw new Error(`图片格式错误：${label} 不是有效的 data:image/png;base64 数据`);
+    throw inputError(`图片格式错误：${label} 不是有效的 data:image/png;base64 数据`);
   }
   let buffer;
   try {
     buffer = Buffer.from(match[1], 'base64');
   } catch {
-    throw new Error(`图片格式错误：${label} 的 base64 数据无法解码`);
+    throw inputError(`图片格式错误：${label} 的 base64 数据无法解码`);
   }
   if (buffer.length < 24 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
-    throw new Error(`图片格式错误：${label} 不是有效的 PNG 图片`);
+    throw inputError(`图片格式错误：${label} 不是有效的 PNG 图片`);
   }
   return buffer;
 }
@@ -660,14 +673,14 @@ function wordImageSize(buffer) {
 async function buildWordDocument(payload) {
   const result = resolveResult(payload);
   if (!result || !result.plans || !result.plans.A) {
-    throw new Error('缺少排版结果');
+    throw inputError('缺少排版结果');
   }
   const plan = result.plans.A;
   assertValidResultShape(plan);
 
   const slabs = plan.slabs;
   if (slabs.length === 0) {
-    throw new Error('排版结果结构非法：plans.A.slabs 不能为空');
+    throw inputError('排版结果结构非法：plans.A.slabs 不能为空');
   }
   // 导出前深度完整性校验：坐标/尺寸/越界/重叠/面积守恒/编号/数量。
   assertExportIntegrity(plan);
@@ -675,10 +688,10 @@ async function buildWordDocument(payload) {
   const images = payload && payload.images;
   const list = images && images.A;
   if (!images || !Array.isArray(list) || list.length === 0) {
-    throw new Error('缺少图片');
+    throw inputError('缺少图片');
   }
   if (list.length !== slabs.length) {
-    throw new Error(`图片数量不符：排版结果共 ${slabs.length} 块母板，但收到 ${list.length} 张图片`);
+    throw inputError(`图片数量不符：排版结果共 ${slabs.length} 块母板，但收到 ${list.length} 张图片`);
   }
 
   const sections = slabs.map((slab, i) => {
