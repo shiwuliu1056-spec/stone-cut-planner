@@ -130,7 +130,7 @@
       <view class="section-title">解析结果</view>
       <view class="platform-badge">{{result.platformLabel || platformLabel}}</view>
     </view>
-    <video class="video-preview" src="{{videoUrl}}" controls object-fit="contain" show-center-play-btn></video>
+    <video id="watermarkVideo" class="video-preview" src="{{videoUrl}}" controls object-fit="contain" show-center-play-btn></video>
     <view class="result-actions single-result-action">
       <button class="primary-action result-action" bindtap="saveVideo" disabled="{{saving || parsing || transcribing}}">保存视频</button>
     </view>

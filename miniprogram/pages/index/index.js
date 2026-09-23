@@ -174,6 +174,15 @@ Page({
   switchTool(event) {
     const tool = String(event.currentTarget.dataset.tool || "");
     if (!tool || tool === this.data.tool) return;
+    // 两个工具用 hidden 常驻，video 组件不会被销毁：切走时若不手动暂停，
+    // 视频的音频会继续播。
+    if (this.data.tool === "watermark" && this.data.videoUrl) {
+      try {
+        wx.createVideoContext("watermarkVideo", this).pause();
+      } catch {
+        /* 部分环境下取不到上下文，忽略 */
+      }
+    }
     // 只切 hidden，不换 webview、不重建 DOM —— 这是消除切换白帧的关键。
     this.setData({ tool });
     this.applyToolTitle(tool);
@@ -613,8 +622,6 @@ Page({
       this.unlockBusy();
     }
   },
-
-  noop() {},
 
   /* ======================================================== 视频去水印 */
 
