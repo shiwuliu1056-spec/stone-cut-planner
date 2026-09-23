@@ -173,11 +173,21 @@ class SolveTaskManager {
   }
 
   persist() {
-    if (!this.storageFile) return;
+    if (!this.storageFile || this.closed) return;
     if (this.persistPending) { this.persistDirty = true; return; }
     this.persistPending = true; this.persistDirty = false;
+    const tmpFile = `${this.storageFile}.${process.pid}.${crypto.randomUUID()}.tmp`;
     const snapshot = [...this.tasks.values()].map(({ taskId, status, progress, createdAt, updatedAt, expiresAt, inputHash, idempotencyKey, result, error }) => ({ taskId, status, progress, createdAt, updatedAt, expiresAt, inputHash, idempotencyKey, result, error }));
-    fsp.mkdir(path.dirname(this.storageFile), { recursive: true }).then(() => fsp.writeFile(`${this.storageFile}.tmp`, JSON.stringify(snapshot), 'utf8')).then(() => fsp.rename(`${this.storageFile}.tmp`, this.storageFile)).catch((error) => process.stderr.write(`排版任务存储写入失败：${error.message}\n`)).finally(() => { this.persistPending = false; if (this.persistDirty) this.persist(); });
+    fsp.mkdir(path.dirname(this.storageFile), { recursive: true })
+      .then(() => fsp.writeFile(tmpFile, JSON.stringify(snapshot), 'utf8'))
+      .then(() => fsp.rename(tmpFile, this.storageFile))
+      .catch((error) => process.stderr.write(`排版任务存储写入失败：${error.message}\n`))
+      .finally(() => {
+        fsp.rm(tmpFile, { force: true }).catch(() => {});
+        this.persistPending = false;
+        if (this.closed) this.persistSync();
+        else if (this.persistDirty) this.persist();
+      });
   }
 
   persistSync() {

@@ -36,7 +36,6 @@ const EPS = 1e-9;
 // 超过后布局搜索停止扩展并使用已找到的最优完整布局（贪心兜底保证仍有解）。
 const MAX_SEARCH_STATES = 200000;
 const KERF_MM = 4;
-const FAST_MOVE_CLEARANCE_MM = 100;
 
 function area(r) { return r.w * r.h; }
 
@@ -69,19 +68,29 @@ function splitFree(free, used) {
 }
 
 function pruneContained(list) {
+  // O(n) 去重：细条零件会把自由空间切成大量坐标完全相同的碎片，
+  // 先用 Set 去重能显著缩小后续包含检查的规模。
+  const seenKeys = new Set();
   const uniq = [];
   for (const r of list) {
     if (r.w <= EPS || r.h <= EPS) continue;
-    if (!uniq.some((u) => Math.abs(u.x - r.x) < EPS && Math.abs(u.y - r.y) < EPS
-      && Math.abs(u.w - r.w) < EPS && Math.abs(u.h - r.h) < EPS)) uniq.push(r);
+    const key = `${r.x},${r.y},${r.w},${r.h}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    uniq.push(r);
   }
+  // 按面积降序后，矩形只可能被排在它前面的（面积不小于它的）矩形包含；
+  // 等面积互含只可能是同一矩形（已在去重阶段合并）。结果集合与原先一致，
+  // 顺序变化不影响最终结果：候选位置随后会按 y/x/dir 确定性重排。
+  uniq.sort((a, b) => area(b) - area(a));
   const out = [];
   for (let i = 0; i < uniq.length; i += 1) {
+    const r = uniq[i];
     let contained = false;
-    for (let j = 0; j < uniq.length; j += 1) {
-      if (i !== j && containsRect(uniq[j], uniq[i])) { contained = true; break; }
+    for (let j = 0; j < i; j += 1) {
+      if (containsRect(uniq[j], r)) { contained = true; break; }
     }
-    if (!contained) out.push(uniq[i]);
+    if (!contained) out.push(r);
   }
   return out;
 }
@@ -94,17 +103,20 @@ function reservedRect(W, H, placement) {
   };
 }
 
+/** 在已有自由矩形列表上放置一件成品（含刀口预留），返回新的自由矩形列表。 */
+function advanceFreeRects(W, H, free, placement) {
+  const reserved = reservedRect(W, H, placement);
+  const next = [];
+  for (const f of free) {
+    if (rectsOverlap(f, reserved)) next.push(...splitFree(f, reserved));
+    else next.push(f);
+  }
+  return pruneContained(next);
+}
+
 function buildFreeRects(W, H, placements) {
   let free = [{ x: 0, y: 0, w: W, h: H }];
-  for (const p of placements) {
-    const reserved = reservedRect(W, H, p);
-    const next = [];
-    for (const f of free) {
-      if (rectsOverlap(f, reserved)) next.push(...splitFree(f, reserved));
-      else next.push(f);
-    }
-    free = pruneContained(next);
-  }
+  for (const p of placements) free = advanceFreeRects(W, H, free, p);
   return free;
 }
 
@@ -141,13 +153,21 @@ function buildGrid(W, H, placements, extraRects = []) {
   const nx = xa.length - 1;
   const ny = ya.length - 1;
   const occ = Array.from({ length: nx }, () => new Array(ny).fill(false));
+  // 二分定位每个矩形覆盖的网格索引区间，只填充被覆盖单元，
+  // 而非遍历整个 nx×ny 网格（结果与原实现逐字节等价）。
+  const lowerBound = (arr, v) => {
+    let lo = 0; let hi = arr.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid] < v) lo = mid + 1; else hi = mid; }
+    return lo;
+  };
   for (const p of [...placements, ...extraRects]) {
-    for (let i = 0; i < nx; i += 1) {
-      if (xa[i] >= p.x - EPS && xa[i + 1] <= p.x + p.w + EPS) {
-        for (let j = 0; j < ny; j += 1) {
-          if (ya[j] >= p.y - EPS && ya[j + 1] <= p.y + p.h + EPS) occ[i][j] = true;
-        }
-      }
+    const i0 = lowerBound(xa, p.x);
+    const i1 = lowerBound(xa, p.x + p.w);
+    const j0 = lowerBound(ya, p.y);
+    const j1 = lowerBound(ya, p.y + p.h);
+    for (let i = i0; i < i1; i += 1) {
+      const row = occ[i];
+      for (let j = j0; j < j1; j += 1) row[j] = true;
     }
   }
   return { xa, ya, nx, ny, occ };
@@ -328,8 +348,7 @@ function splitRecoverableOffcuts(rects) {
  * 位置来自 maxrects 自由矩形的左上角贴靠；rotatable 时额外给出旋转朝向。
  * 返回 [{ x, y, w, h, dir }]，dir: 0 原向 / 1 旋转。已按确定性顺序排序。
  */
-function candidatePositions(W, H, placements, pw, ph, rotatable) {
-  const free = buildFreeRects(W, H, placements);
+function candidatePositionsFromFree(W, H, free, placements, pw, ph, rotatable) {
   const orients = [{ w: pw, h: ph, dir: 0 }];
   if (rotatable && pw !== ph) orients.push({ w: ph, h: pw, dir: 1 });
   const out = [];
@@ -364,6 +383,10 @@ function candidatePositions(W, H, placements, pw, ph, rotatable) {
   // 确定性顺序：y 升 -> x 升 -> dir 升（左上优先）
   out.sort((a, b) => a.y - b.y || a.x - b.x || a.dir - b.dir);
   return out;
+}
+
+function candidatePositions(W, H, placements, pw, ph, rotatable) {
+  return candidatePositionsFromFree(W, H, buildFreeRects(W, H, placements), placements, pw, ph, rotatable);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -456,6 +479,10 @@ function searchGroupLayout(W, H, frozen, group, budget) {
   const rotatable = !!spec.rotatable;
   let best = null;
   let bestKey = null;
+  // frozen 在本组搜索期间不变，其自由矩形只需计算一次；
+  // DFS 放置/回溯时增量维护（与全量重建 buildFreeRects 逐字节等价：
+  // 处理顺序完全一致，只是避免每个节点都从头算一遍）。
+  let freeList = buildFreeRects(W, H, frozen);
 
   function dfs(depth, current) {
     const maxStates = budget.maxStates || MAX_SEARCH_STATES;
@@ -473,16 +500,20 @@ function searchGroupLayout(W, H, frozen, group, budget) {
     }
     budget.states += 1;
     const placedSoFar = [...frozen, ...current];
-    const cands = candidatePositions(W, H, placedSoFar, spec.w, spec.h, rotatable);
+    const cands = candidatePositionsFromFree(W, H, freeList, placedSoFar, spec.w, spec.h, rotatable);
     if (cands.length === 0) return;
     // 若已找到完整布局，限制每层分支数以控预算（确定性：取左上优先的前若干个）。
     const branch = best === null ? cands : cands.slice(0, Math.max(4, Math.ceil(cands.length / 2)));
     for (const c of branch) {
-      current.push({
+      const placement = {
         id: spec.id, instance: group.instances[depth], x: c.x, y: c.y, w: c.w, h: c.h, dir: c.dir, ...c,
-      });
+      };
+      const savedFree = freeList;
+      freeList = advanceFreeRects(W, H, freeList, placement);
+      current.push(placement);
       dfs(depth + 1, current);
       current.pop();
+      freeList = savedFree;
       if (budget.states > maxStates && best !== null) break;
     }
   }
@@ -783,428 +814,8 @@ function solveStandard({ settings, parts }) {
   return { plans: { A: { stats, slabs: planSlabs } } };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 快切算法：严格矩形块切（guillotine packing）
-// ─────────────────────────────────────────────────────────────────────────────
-
-const FAST_PRESETS = Object.freeze({
-  material: { label: '节省材料', utilizationTarget: 0.90 },
-  balanced: { label: '平衡', utilizationTarget: 0.80 },
-  speed: { label: '优先快切', utilizationTarget: 0.70 },
-});
-
-function fastPresetConfig(value) {
-  return FAST_PRESETS[value] || FAST_PRESETS.balanced;
-}
-
-function fastDimensionKey(item) {
-  const w = Math.max(Number(item.w) || 0, Number(item.h) || 0);
-  const h = Math.min(Number(item.w) || 0, Number(item.h) || 0);
-  return `${w}×${h}`;
-}
-
-function touchesSameSize(region, item, placements) {
-  const key = fastDimensionKey(item);
-  return placements.some((p) => {
-    if (fastDimensionKey(p) !== key) return false;
-    const overlapX = Math.min(region.x + region.w, p.x + p.w) - Math.max(region.x, p.x);
-    const overlapY = Math.min(region.y + region.h, p.y + p.h) - Math.max(region.y, p.y);
-    const nearX = Math.abs(region.x + region.w + KERF_MM - p.x) < EPS
-      || Math.abs(p.x + p.w + KERF_MM - region.x) < EPS;
-    const nearY = Math.abs(region.y + region.h + KERF_MM - p.y) < EPS
-      || Math.abs(p.y + p.h + KERF_MM - region.y) < EPS;
-    return (nearX && overlapY > EPS) || (nearY && overlapX > EPS);
-  });
-}
-
-function isUsableRemainder(value) {
-  return value <= EPS || value >= KERF_MM - EPS;
-}
-
-/**
- * 把一个待加工件放在当前矩形块左上角，并枚举两种合法的贯穿切顺序：
- * 先竖后横，或先横后竖。每个返回的子块仍是完整矩形，子块之间保留 4mm
- * 刀片宽度；因此后续递归不会产生局部交叉刀路。
- */
-function splitFastRegion(region, item, firstAxis) {
-  const right = region.w - item.w;
-  const bottom = region.h - item.h;
-  if (right < -EPS || bottom < -EPS || !isUsableRemainder(right) || !isUsableRemainder(bottom)) return null;
-  const placement = { id: item.id, instance: item.instance, x: region.x, y: region.y, w: item.w, h: item.h };
-  const cuts = [];
-  const regions = [];
-  if (firstAxis === 'V') {
-    if (right > EPS) {
-      cuts.push({ x1: region.x + item.w, y1: region.y, x2: region.x + item.w, y2: region.y + region.h });
-      regions.push({ x: region.x + item.w + KERF_MM, y: region.y, w: right - KERF_MM, h: region.h });
-    }
-    if (bottom > EPS) {
-      cuts.push({ x1: region.x, y1: region.y + item.h, x2: region.x + item.w, y2: region.y + item.h });
-      regions.push({ x: region.x, y: region.y + item.h + KERF_MM, w: item.w, h: bottom - KERF_MM });
-    }
-  } else {
-    if (bottom > EPS) {
-      cuts.push({ x1: region.x, y1: region.y + item.h, x2: region.x + region.w, y2: region.y + item.h });
-      regions.push({ x: region.x, y: region.y + item.h + KERF_MM, w: region.w, h: bottom - KERF_MM });
-    }
-    if (right > EPS) {
-      cuts.push({ x1: region.x + item.w, y1: region.y, x2: region.x + item.w, y2: region.y + item.h });
-      regions.push({ x: region.x + item.w + KERF_MM, y: region.y, w: right - KERF_MM, h: item.h });
-    }
-  }
-  const usableRegions = regions.filter((r) => r.w > EPS && r.h > EPS);
-  const moveCount = usableRegions.length > 1 ? 1 : 0;
-  const movedArea = moveCount ? Math.min(...usableRegions.map(area)) : 0;
-  return { placement, cuts, regions: usableRegions, moveCount, movedArea };
-}
-
-/** 将空腔边界向相邻成品外侧让出 4mm，得到可安全继续切割的矩形。 */
-function kerfSafePocketRegion(rect, placements) {
-  const safe = { ...rect };
-  const maxX = rect.x + rect.w;
-  const maxY = rect.y + rect.h;
-  for (const p of placements) {
-    const overlapX = Math.min(maxX, p.x + p.w) - Math.max(rect.x, p.x);
-    const overlapY = Math.min(maxY, p.y + p.h) - Math.max(rect.y, p.y);
-    if (overlapX > EPS && p.y + p.h <= safe.y + EPS) {
-      const nextY = p.y + p.h + KERF_MM;
-      if (nextY > safe.y && nextY < maxY + EPS) { safe.y = nextY; safe.h = maxY - nextY; }
-    } else if (overlapX > EPS && p.y >= safe.y + safe.h - EPS) {
-      const nextBottom = p.y - KERF_MM;
-      if (nextBottom < safe.y + safe.h && nextBottom > rect.y - EPS) safe.h = nextBottom - safe.y;
-    }
-    if (overlapY > EPS && p.x + p.w <= safe.x + EPS) {
-      const nextX = p.x + p.w + KERF_MM;
-      if (nextX > safe.x && nextX < maxX + EPS) { safe.x = nextX; safe.w = maxX - nextX; }
-    } else if (overlapY > EPS && p.x >= safe.x + safe.w - EPS) {
-      const nextRight = p.x - KERF_MM;
-      if (nextRight < safe.x + safe.w && nextRight > rect.x - EPS) safe.w = nextRight - safe.x;
-    }
-  }
-  return safe.w > EPS && safe.h > EPS ? safe : null;
-}
-
-/** 末端块允许沿当前方向吸收最多 4mm 刀片损耗，且只缩短一个尺寸。 */
-function terminalVariants(region, item) {
-  const variants = [];
-  const orientations = item.rotatable && item.w !== item.h
-    ? [{ w: item.w, h: item.h }, { w: item.h, h: item.w }]
-    : [{ w: item.w, h: item.h }];
-  for (const orientation of orientations) {
-    let w = orientation.w, h = orientation.h;
-    let shortageAxis = '';
-    if (w > region.w + EPS && w - region.w <= KERF_MM + EPS) { w = region.w; shortageAxis = 'w'; }
-    if (h > region.h + EPS && h - region.h <= KERF_MM + EPS) {
-      if (shortageAxis) continue;
-      h = region.h; shortageAxis = 'h';
-    }
-    if (w <= region.w + EPS && h <= region.h + EPS) {
-      variants.push({ ...item, w, h, requestedW: orientation.w, requestedH: orientation.h, shortageAxis, shortage: shortageAxis ? KERF_MM : 0 });
-    }
-  }
-  return variants;
-}
-
-function mergeFastCuts(cuts) {
-  const groups = new Map();
-  for (const cut of cuts) {
-    const vertical = Math.abs(cut.x1 - cut.x2) < EPS;
-    const axis = vertical ? 'V' : 'H';
-    const start = vertical ? Math.min(cut.y1, cut.y2) : Math.min(cut.x1, cut.x2);
-    const end = vertical ? Math.max(cut.y1, cut.y2) : Math.max(cut.x1, cut.x2);
-    const fixed = vertical ? cut.x1 : cut.y1;
-    const key = `${axis}:${fixed}:${start}:${end}`;
-    if (!groups.has(key)) groups.set(key, {
-      x1: cut.x1, y1: cut.y1, x2: cut.x2, y2: cut.y2,
-      axis, length: end - start,
-    });
-  }
-  return [...groups.values()].sort((a, b) => (
-    a.axis.localeCompare(b.axis) || a.y1 - b.y1 || a.x1 - b.x1 || a.x2 - b.x2 || a.y2 - b.y2
-  ));
-}
-
-function fastItemOrders(items) {
-  const stable = items.map((item, index) => ({ ...item, _order: index }));
-  const groups = new Map();
-  for (const item of stable) {
-    const key = fastDimensionKey(item);
-    if (!groups.has(key)) groups.set(key, { key, items: [], first: item._order, area: area(item), max: Math.max(item.w, item.h), min: Math.min(item.w, item.h) });
-    groups.get(key).items.push(item);
-  }
-  const flatten = (compareGroups) => [...groups.values()]
-    .sort((a, b) => compareGroups(a, b) || a.first - b.first)
-    .flatMap((group) => group.items.slice().sort((a, b) => String(a.id).localeCompare(String(b.id), 'zh-CN') || a._order - b._order));
-  return [
-    flatten((a, b) => b.area - a.area),
-    flatten((a, b) => b.max - a.max || b.min - a.min),
-    flatten((a, b) => b.min - a.min || b.area - a.area),
-    flatten(() => 0),
-  ];
-}
-
-function compareFastCandidates(a, b, target) {
-  const aTarget = a.utilization + EPS >= target;
-  const bTarget = b.utilization + EPS >= target;
-  if (a.placedCount !== b.placedCount) return b.placedCount - a.placedCount;
-  if (aTarget !== bTarget) return aTarget ? -1 : 1;
-  if (a.moveCount !== b.moveCount) return a.moveCount - b.moveCount;
-  if (a.cutCount !== b.cutCount) return a.cutCount - b.cutCount;
-  if (Math.abs(a.movedArea - b.movedArea) > EPS) return a.movedArea - b.movedArea;
-  if (Math.abs(a.utilization - b.utilization) > EPS) return b.utilization - a.utilization;
-  return a.key.localeCompare(b.key);
-}
-
-function compareFastScore(a, b) {
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] === b[i]) continue;
-    if (typeof a[i] === 'string' || typeof b[i] === 'string') return String(a[i]).localeCompare(String(b[i]));
-    return a[i] - b[i];
-  }
-  return 0;
-}
-
-/** 单个母板上的确定性快切贪心搜索，尝试多个规格顺序后选成本最低者。 */
-function searchFastSlab(W, H, items, target) {
-  let best = null;
-  for (const order of fastItemOrders(items)) {
-    const regions = [{ x: 0, y: 0, w: W, h: H }];
-    const placements = [];
-    const cuts = [];
-    const tree = [];
-    let moveCount = 0;
-    let movedArea = 0;
-    for (const item of order) {
-      const candidates = [];
-      for (let ri = 0; ri < regions.length; ri += 1) {
-        const region = regions[ri];
-        for (const orientedItem of terminalVariants(region, item)) {
-          if (orientedItem.shortageAxis
-            && !((orientedItem.shortageAxis === 'w' && Math.abs(region.x + region.w - W) < EPS)
-              || (orientedItem.shortageAxis === 'h' && Math.abs(region.y + region.h - H) < EPS))) continue;
-          for (const axis of ['V', 'H']) {
-            const split = splitFastRegion(region, orientedItem, axis);
-            if (!split) continue;
-            if (orientedItem.shortageAxis) {
-              split.placement.requestedW = orientedItem.requestedW;
-              split.placement.requestedH = orientedItem.requestedH;
-              split.placement.shortage = orientedItem.shortage;
-              split.placement.shortageAxis = orientedItem.shortageAxis;
-              split.placement.terminal = true;
-            }
-            const remainingArea = split.regions.reduce((sum, r) => sum + area(r), 0);
-            const sameGroup = touchesSameSize(region, orientedItem, placements) ? 0 : 1;
-            candidates.push({ ri, split, score: [sameGroup, split.moveCount, split.cuts.length, remainingArea, ri, axis] });
-          }
-        }
-      }
-      if (!candidates.length) continue;
-      candidates.sort((a, b) => compareFastScore(a.score, b.score));
-      const chosen = candidates[0];
-      tree.push({
-        type: 'split',
-        axis: chosen.score[5],
-        region: { ...regions[chosen.ri] },
-        item: { id: chosen.split.placement.id, instance: chosen.split.placement.instance },
-        children: chosen.split.regions.map((r) => ({ ...r })),
-      });
-      regions.splice(chosen.ri, 1, ...chosen.split.regions);
-      placements.push(chosen.split.placement);
-      cuts.push(...chosen.split.cuts);
-      moveCount += chosen.split.moveCount;
-      movedArea += chosen.split.movedArea;
-      regions.sort((a, b) => area(b) - area(a) || a.y - b.y || a.x - b.x);
-    }
-
-    // 严格分块完成后再检查一次真实空腔。分离块允许被挪开，因此某些由
-    // 不同分块边界围成的完整矩形空位（例如 504×800）仍然可以继续下料；
-    // 这类回填按一次让位搬动计入，但不会把原有成品重新排版。
-    const placedInstances = new Set(placements.map((p) => p.instance));
-    let pending = order.filter((item) => !placedInstances.has(item.instance));
-    while (pending.length) {
-      const grid = buildGrid(W, H, placements, deriveKerfRects(placements));
-      const pockets = freeOffcutRects(grid);
-      const pocketCandidates = [];
-      for (let pi = 0; pi < pockets.length; pi += 1) {
-        const safePocket = kerfSafePocketRegion(pockets[pi], placements);
-        if (!safePocket) continue;
-        for (const item of pending) {
-          for (const orientedItem of terminalVariants(safePocket, item)) {
-            for (const axis of ['V', 'H']) {
-              const split = splitFastRegion(safePocket, orientedItem, axis);
-              if (!split) continue;
-              // 空腔的边界可能来自已完成成品，而不是已登记的刀路；
-              // 新成品仍必须与所有既有成品保持完整 4mm 刀片间隔。
-              if (placements.some((p) => kerfConflict(split.placement, p))) continue;
-              if (orientedItem.shortageAxis) {
-                split.placement.requestedW = orientedItem.requestedW;
-                split.placement.requestedH = orientedItem.requestedH;
-                split.placement.shortage = orientedItem.shortage;
-                split.placement.shortageAxis = orientedItem.shortageAxis;
-                split.placement.terminal = true;
-              }
-              pocketCandidates.push({
-                pi, item, split,
-                score: [touchesSameSize(safePocket, orientedItem, placements) ? 0 : 1, split.cuts.length, orientedItem.shortageAxis ? 1 : 0, -area(orientedItem), pi, axis],
-              });
-            }
-          }
-        }
-      }
-      if (!pocketCandidates.length) break;
-      pocketCandidates.sort((a, b) => compareFastScore(a.score, b.score)
-        || String(a.item.instance).localeCompare(String(b.item.instance)));
-      const chosen = pocketCandidates[0];
-      tree.push({
-        type: 'pocket-fill',
-        axis: chosen.score[5],
-        region: { ...kerfSafePocketRegion(pockets[chosen.pi], placements) },
-        item: { id: chosen.item.id, instance: chosen.item.instance },
-        children: chosen.split.regions.map((r) => ({ ...r })),
-      });
-      placements.push(chosen.split.placement);
-      cuts.push(...chosen.split.cuts);
-      // 空腔回填需要先把邻接块挪开，即使该空腔本身只剩一条切线。
-      moveCount += Math.max(1, chosen.split.moveCount);
-      movedArea += Math.max(area(chosen.split.placement), chosen.split.movedArea);
-      placedInstances.add(chosen.item.instance);
-      pending = pending.filter((item) => item.instance !== chosen.item.instance);
-    }
-    const mergedCuts = mergeFastCuts(cuts);
-    const placedArea = placements.reduce((sum, p) => sum + area(p), 0);
-    const candidate = {
-      placements,
-      cuts: mergedCuts,
-      tree,
-      placedCount: placements.length,
-      moveCount,
-      cutCount: mergedCuts.length,
-      movedArea,
-      utilization: placedArea / (W * H),
-      key: placements.map((p) => `${p.id}:${p.x},${p.y},${p.w},${p.h}`).join('|'),
-    };
-    if (!best || compareFastCandidates(candidate, best, target) < 0) best = candidate;
-  }
-  return best;
-}
-
-function solveFast({ settings, parts }) {
-  const invalid = validateInput(settings, parts);
-  if (invalid) {
-    const err = new Error(invalid);
-    err.code = 'INVALID_SOLVE_INPUT';
-    throw err;
-  }
-  const presetName = FAST_PRESETS[settings.fastPreset] ? settings.fastPreset : 'balanced';
-  const preset = fastPresetConfig(presetName);
-  const remaining = new Map(parts.map((p) => [p.id, p.qty]));
-  const instanceCounter = new Map(parts.map((p) => [p.id, 0]));
-  const usage = new Map(settings.slabs.map((s) => [s, 0]));
-  const namer = makeSlabNamer(settings.slabs);
-  const slabs = [];
-  const stats = {
-    slabCount: 0, offcutCount: 0, offcutArea: 0, kerfWasteArea: 0,
-    fastCut: {
-      preset: presetName,
-      utilizationTarget: preset.utilizationTarget,
-      moveClearance: FAST_MOVE_CLEARANCE_MM,
-      moveCount: 0,
-      cutCount: 0,
-      terminalShortages: 0,
-    },
-  };
-  let serial = 0;
-  const totalRemaining = () => [...remaining.values()].reduce((sum, n) => sum + n, 0);
-  while (totalRemaining() > 0) {
-    const ordered = specOrder(parts.filter((p) => remaining.get(p.id) > 0));
-    const top = ordered[0];
-    let chosenSlab = null;
-    for (const slab of settings.slabs) {
-      if (usage.get(slab) >= slabLimit(slab)) continue;
-      if (fitsInSlab(slab, top.w, top.h, !!top.rotatable)) { chosenSlab = slab; break; }
-    }
-    if (!chosenSlab) {
-      const err = new Error(`母板数量不足，快切算法尚余 ${totalRemaining()} 件成品无法排入`);
-      err.code = 'NOT_ENOUGH_SLABS';
-      throw err;
-    }
-    const items = [];
-    for (const part of parts) {
-      const count = remaining.get(part.id) || 0;
-      for (let i = 0; i < count; i += 1) {
-        items.push({ ...part, instance: `${part.id}-${(instanceCounter.get(part.id) || 0) + i + 1}` });
-      }
-    }
-    const candidate = searchFastSlab(chosenSlab.w, chosenSlab.h, items, preset.utilizationTarget);
-    if (!candidate || candidate.placements.length === 0) {
-      const err = new Error(`单张母板 ${chosenSlab.id || '(未命名)'} 无法容纳任何剩余成品`);
-      err.code = 'SINGLE_SLAB_TOO_SMALL';
-      throw err;
-    }
-    usage.set(chosenSlab, usage.get(chosenSlab) + 1);
-    serial += 1;
-    const counts = new Map();
-    for (const placement of candidate.placements) counts.set(placement.id, (counts.get(placement.id) || 0) + 1);
-    for (const [id, count] of counts) {
-      remaining.set(id, remaining.get(id) - count);
-      instanceCounter.set(id, (instanceCounter.get(id) || 0) + count);
-    }
-    const placements = candidate.placements.map(({ id, instance, x, y, w, h, requestedW, requestedH, shortage, shortageAxis, terminal }) => ({
-      id, instance, x, y, w, h,
-      ...(terminal ? { requestedW, requestedH, shortage, shortageAxis, terminal: true } : {}),
-    }));
-    const kerfRects = deriveKerfRects(placements);
-    const grid = buildGrid(chosenSlab.w, chosenSlab.h, placements, kerfRects);
-    const offcutSplit = splitRecoverableOffcuts(freeOffcutRects(grid));
-    const allOffcuts = offcutSplit.recoverable.map((r, i) => ({
-      id: `R${String(i + 1).padStart(2, '0')}`, x: r.x, y: r.y, w: r.w, h: r.h,
-    }));
-    const placedArea = placements.reduce((sum, p) => sum + area(p), 0);
-    const offcutArea = allOffcuts.reduce((sum, o) => sum + area(o), 0);
-    const kerfWasteArea = occupiedArea(grid) - placedArea + offcutSplit.bladeWasteArea;
-    const rawId = chosenSlab.id;
-    const slabId = rawId != null && String(rawId).trim() ? String(rawId) : namer();
-    const operations = candidate.cuts.map((cut, i) => ({ ...cut, order: i + 1 }));
-    const terminalShortages = placements.filter((placement) => placement.terminal && placement.shortage).length;
-    const warningParts = [];
-    if (candidate.utilization + EPS < preset.utilizationTarget) {
-      warningParts.push(`该母板利用率 ${(candidate.utilization * 100).toFixed(1)}% 低于${preset.label}档位目标`);
-    }
-    if (terminalShortages) warningParts.push(`末端块按实际尺寸切割，共 ${terminalShortages} 件少 4mm`);
-    const fastCut = {
-      preset: presetName,
-      utilizationTarget: preset.utilizationTarget,
-      utilization: candidate.utilization,
-      moveClearance: FAST_MOVE_CLEARANCE_MM,
-      moveCount: candidate.moveCount,
-      cutCount: candidate.cutCount,
-      movedArea: candidate.movedArea,
-      terminalShortages,
-      operations,
-      tree: candidate.tree,
-      warning: warningParts.join('；'),
-    };
-    slabs.push({
-      id: slabId, index: serial, w: chosenSlab.w, h: chosenSlab.h,
-      placements, cuts: candidate.cuts, allOffcuts, kerfWasteArea, fastCut,
-    });
-    stats.slabCount += 1;
-    stats.offcutCount += allOffcuts.length;
-    stats.offcutArea += offcutArea;
-    stats.kerfWasteArea += kerfWasteArea;
-    stats.fastCut.moveCount += candidate.moveCount;
-    stats.fastCut.cutCount += candidate.cutCount;
-    stats.fastCut.terminalShortages += terminalShortages;
-  }
-  const warnings = slabs.filter((s) => s.fastCut.warning).map((s) => s.fastCut.warning);
-  if (warnings.length) stats.fastCut.warning = warnings.join('；');
-  return { plans: { A: { stats, slabs } } };
-}
-
 function solve(input) {
-  return input && input.settings && input.settings.algorithm === 'fast'
-    ? solveFast(input)
-    : solveStandard(input);
+  return solveStandard(input);
 }
 
 module.exports = {
@@ -1213,6 +824,5 @@ module.exports = {
   _internal: {
     buildGrid, countEmptyRegions, countContourEdges, freeOffcutRects, splitRecoverableOffcuts,
     candidatePositions, layoutMetrics, cmpMetrics, specOrder, validateInput,
-    splitFastRegion, mergeFastCuts, searchFastSlab, solveFast,
   },
 };
