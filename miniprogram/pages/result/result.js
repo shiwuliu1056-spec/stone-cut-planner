@@ -1,4 +1,5 @@
-const { drawSlab } = require('../../utils/render');
+// 文件用途：读取最新排版结果并驱动画布绘制、分页查看和结果展示。
+const { CANVAS_H, CANVAS_W, drawSlab } = require('../../utils/render');
 
 Page({
   data: { result: null, plan: null, stats: null, productRateText: '0.0%', offcutAreaText: '0.000 ㎡', slabIndex: 0, renderedSlabIndex: -1, canvasReady: false, drawing: false, saving: false },
@@ -52,7 +53,7 @@ Page({
     if (!this.data.canvasReady || this.data.drawing || this.data.renderedSlabIndex !== this.data.slabIndex || !this.canvas) return Promise.reject(new Error('排版图还没有绘制完成'));
     return new Promise((resolve, reject) => wx.canvasToTempFilePath({
       canvas: this.canvas,
-      x: 0, y: 0, width: 3000, height: 2121, destWidth: 3000, destHeight: 2121,
+      x: 0, y: 0, width: CANVAS_W, height: CANVAS_H, destWidth: CANVAS_W, destHeight: CANVAS_H,
       fileType: 'png',
       success: (res) => resolve(res.tempFilePath),
       fail: reject,
@@ -65,7 +66,7 @@ Page({
     try {
       const filePath = await this.exportCanvas();
       wx.previewImage({ urls: [filePath], current: filePath });
-    } catch (_) {
+    } catch {
       wx.showToast({ title: '图片生成失败，请重试', icon: 'none' });
     } finally {
       this.setData({ saving: false });

@@ -1,3 +1,4 @@
+/* 文件用途：定义拍照识别校对页的标题、图片、尺寸表单和确认按钮样式。 */
 .review-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24rpx; padding: 4rpx 4rpx 8rpx; }
 .eyebrow { margin-bottom: 10rpx; color: #c99352; font-size: 20rpx; letter-spacing: 3rpx; }
 .page-title { color: var(--color-primary); font-size: 42rpx; font-weight: 700; }

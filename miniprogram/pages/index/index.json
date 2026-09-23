@@ -1,3 +1,9 @@
 {
-  "navigationBarTitleText": "宝松石材下料工具"
+  "navigationBarTitleText": "石材下料工具",
+  "navigationBarBackgroundColor": "#173e38",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#173e38",
+  "backgroundColorTop": "#173e38",
+  "backgroundColorBottom": "#173e38",
+  "backgroundTextStyle": "light"
 }

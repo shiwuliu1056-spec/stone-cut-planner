@@ -1,15 +1,93 @@
-.hero-card { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24rpx; padding: 36rpx 32rpx; border-radius: 28rpx; background: #173e38; color: #fff; box-shadow: 0 16rpx 36rpx rgba(23, 62, 56, 0.2); }
+/* 文件用途：单页同时定义「石材下料」与「视频去水印」两个工具的样式。
+   两个工具各自被包在 .index-page / .watermark-page 容器里，靠 hidden 切换显隐。
+   命名冲突的类已做隔离：.field-label 归下料工具，去水印平台标签用 .platform-field-label。 */
+
+/* ==================== 共用：深绿 hero 卡片（两个工具样式完全一致）==================== */
+.hero-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+  padding: 36rpx 32rpx;
+  border-radius: 28rpx;
+  background: #173e38;
+  color: #fff;
+  box-shadow: 0 16rpx 36rpx rgba(23, 62, 56, 0.2);
+}
 .eyebrow { margin-bottom: 12rpx; color: #d8b37a; font-size: 20rpx; letter-spacing: 3rpx; }
 .hero-title { font-size: 42rpx; font-weight: 700; }
 .hero-subtitle { margin-top: 10rpx; color: rgba(255, 255, 255, 0.68); font-size: 24rpx; }
-.progress-float { position: fixed; left: 50%; bottom: 32rpx; bottom: calc(32rpx + constant(safe-area-inset-bottom)); bottom: calc(32rpx + env(safe-area-inset-bottom)); z-index: 100; display: flex; align-items: center; gap: 18rpx; box-sizing: border-box; width: 390rpx; max-width: calc(100vw - 56rpx); padding: 14rpx 20rpx; border: 1rpx solid rgba(201, 147, 82, 0.34); border-radius: 20rpx; background: rgba(255, 250, 240, 0.97); box-shadow: 0 12rpx 34rpx rgba(23, 62, 56, 0.2); transform: translateX(-50%); }
-.progress-ring { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; box-sizing: border-box; width: 84rpx; height: 84rpx; border-radius: 50%; background: rgba(201, 147, 82, 0.16); }
-.progress-ring-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; border-radius: 50%; background: #fffaf0; color: var(--color-primary); }
-.progress-number { align-self: center; font-size: 25rpx; font-weight: 700; line-height: 1; }
-.progress-total { align-self: center; margin-top: 2rpx; color: var(--color-muted); font-size: 13rpx; line-height: 1; }
-.progress-copy { flex: 1; }
-.progress-title { margin-bottom: 4rpx; color: var(--color-primary); font-size: 26rpx; font-weight: 700; }
-.section-title-actions, .item-heading, .limit-row, .algorithm-row, .picker-value, .preset-picker { display: flex; align-items: center; justify-content: space-between; }
+
+/* ==================== 底部工具切换栏（页面内，不换 webview）==================== */
+.tab-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 90;
+  display: flex;
+  box-sizing: border-box;
+  height: calc(108rpx + env(safe-area-inset-bottom));
+  padding: 12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid rgba(23, 62, 56, 0.1);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 -10rpx 30rpx rgba(23, 62, 56, 0.06);
+}
+
+.tab-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 38rpx;
+  color: #7b8883;
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.tab-item.active {
+  background: #edf4f0;
+  color: #173e38;
+}
+
+/* ==================== 工具一：石材下料 ==================== */
+.index-page {
+  background-color: #f7f5f0;
+  padding-bottom: 280rpx;
+  padding-bottom: calc(280rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(280rpx + env(safe-area-inset-bottom));
+}
+
+.cut-progress-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 120;
+  background: rgba(23, 62, 56, 0.16);
+}
+
+.cut-progress-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 121;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  box-sizing: border-box;
+  width: 390rpx;
+  max-width: calc(100vw - 56rpx);
+  padding: 18rpx 22rpx;
+  border: 1rpx solid rgba(201, 147, 82, 0.34);
+  border-radius: 20rpx;
+  background: rgba(255, 250, 240, 0.98);
+  box-shadow: 0 18rpx 48rpx rgba(23, 62, 56, 0.24);
+  transform: translate(-50%, -50%);
+}
+
+.section-title-actions, .item-heading, .limit-row, .algorithm-note, .picker-value { display: flex; align-items: center; justify-content: space-between; }
 .text-action, .delete-action { color: var(--color-muted); font-size: 23rpx; }
 .text-action { margin-left: 18rpx; }
 .delete-action { color: #b66c62; }
@@ -35,11 +113,133 @@
 .secondary-action[disabled] { opacity: 0.55; }
 .summary-badge { color: var(--color-muted); font-size: 22rpx; font-weight: 400; }
 .compact-section { padding-bottom: 24rpx; }
-.algorithm-row { gap: 16rpx; }
-.algorithm-option { flex: 1; box-sizing: border-box; padding: 22rpx; border: 1rpx solid rgba(23, 62, 56, 0.1); border-radius: 16rpx; background: #fbfaf7; }
-.algorithm-option.active { border-color: var(--color-primary); background: #edf4f0; box-shadow: inset 0 0 0 1rpx var(--color-primary); }
-.algorithm-name { margin-bottom: 8rpx; color: var(--color-text); font-size: 28rpx; font-weight: 600; }
-.preset-slot { visibility: hidden; box-sizing: border-box; height: 78rpx; margin-top: 18rpx; padding-top: 18rpx; border-top: 1rpx solid rgba(23, 62, 56, 0.08); }
-.preset-slot.active { visibility: visible; }
-.preset-picker { color: var(--color-primary); font-size: 25rpx; }
+.algorithm-note { box-sizing: border-box; padding: 22rpx; border-radius: 16rpx; background: #fbfaf7; }
+.algorithm-name { color: var(--color-text); font-size: 28rpx; font-weight: 600; }
 .primary-action { display: flex; align-items: center; justify-content: center; gap: 10rpx; }
+
+/* ==================== 工具二：视频去水印 ==================== */
+.watermark-page {
+  padding-bottom: 180rpx;
+  background-color: #f7f5f0;
+}
+
+/* 水滴：正方形单角不圆角后旋转 45°，尖角朝上 */
+.hero-drop { flex: 0 0 auto; width: 36rpx; height: 36rpx; background: #c99352; border-radius: 0 50% 50% 50%; transform: rotate(45deg); }
+
+.platform-field { margin-bottom: 26rpx; }
+.platform-field-label { margin-bottom: 12rpx; color: #667570; font-size: 23rpx; }
+.platform-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 82rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid rgba(23, 62, 56, 0.13);
+  border-radius: 18rpx;
+  background: #fbfaf7;
+  color: #20332f;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+.platform-picker-arrow { color: #a66f30; font-size: 46rpx; font-weight: 400; transform: rotate(90deg); }
+.input-section-title { margin-bottom: 16rpx; }
+
+.link-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 210rpx;
+  padding: 24rpx;
+  border: 1rpx solid rgba(23, 62, 56, 0.13);
+  border-radius: 18rpx;
+  background: #fbfaf7;
+  color: #20332f;
+  font-size: 27rpx;
+  line-height: 1.6;
+}
+
+.parse-action,
+.result-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.parse-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; margin-top: 22rpx; }
+.parse-actions > .parse-action { width: 100%; min-width: 0; }
+.parse-action { height: 84rpx; font-size: 27rpx; }
+.result-card { margin-top: 24rpx; }
+.result-heading { display: flex; align-items: center; justify-content: space-between; }
+.platform-badge {
+  padding: 7rpx 16rpx;
+  border-radius: 999rpx;
+  background: rgba(201, 147, 82, 0.14);
+  color: #8d5e29;
+  font-size: 21rpx;
+  font-weight: 600;
+}
+
+.video-preview {
+  display: block;
+  width: 100%;
+  height: 390rpx;
+  overflow: hidden;
+  border-radius: 18rpx;
+  background: #102f2a;
+}
+
+.caption-box {
+  margin-top: 20rpx;
+  padding: 22rpx;
+  border-radius: 16rpx;
+  background: #fbfaf7;
+}
+.transcript-only-box { margin-top: 0; }
+
+.caption-label { margin-bottom: 10rpx; color: #7b8883; font-size: 22rpx; }
+.caption-content {
+  position: relative;
+  max-height: 238rpx;
+  overflow: hidden;
+}
+.caption-content-expanded { max-height: none; }
+.caption-content-collapsed::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 76rpx;
+  background: linear-gradient(to bottom, rgba(251, 250, 247, 0), #fbfaf7 82%);
+  content: '';
+  pointer-events: none;
+}
+.caption-text {
+  display: block;
+  color: #20332f;
+  font-size: 26rpx;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.caption-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 180rpx;
+  height: 58rpx;
+  margin: 12rpx auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a66f30;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1;
+}
+.caption-toggle::after { border: 0; }
+.result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin-top: 22rpx; }
+.single-result-action { grid-template-columns: 1fr; }
+.result-action { height: 84rpx; font-size: 27rpx; }

@@ -1,21 +1,16 @@
-<view class="page-shell">
+<!-- 文件用途：单页同时承载「石材下料」与「视频去水印」两个工具。
+     底部切换用 hidden 显隐而不是 wx.switchTab：不换 webview 就不会出现 iOS 上的整屏白帧，
+     同时两个工具的 DOM 常驻，切换时表单状态不丢、也不需要重新渲染。 -->
+
+<!-- ==================== 工具一：石材下料 ==================== -->
+<view class="page-shell index-page" hidden="{{tool !== 'cut'}}">
   <view class="hero-card">
     <view>
       <view class="eyebrow">STONE CUT PLANNER</view>
-      <view class="hero-title">宝松石材下料工具</view>
+      <view class="hero-title">石材下料工具</view>
       <view class="hero-subtitle">录入尺寸，生成清晰排版图</view>
     </view>
     <text class="ui-icon hero-icon">▤</text>
-  </view>
-
-  <view wx:if="{{progressTask}}" class="progress-float" aria-label="正在处理">
-    <view class="progress-ring" style="background: conic-gradient(#c99352 {{progress}}%, rgba(201, 147, 82, 0.16) 0);">
-      <view class="progress-ring-inner"><text class="progress-number">{{progress}}</text><text class="progress-total">/100</text></view>
-    </view>
-    <view class="progress-copy">
-      <view class="progress-title">{{progressTask === 'ocr' ? '拍照识别' : progressTask === 'import' ? '导入表格' : progressTask === 'fast' ? '快切' : '标准排版'}}</view>
-      <view class="muted">正在处理，请稍候…</view>
-    </view>
   </view>
 
   <view class="section-card">
@@ -74,14 +69,113 @@
 
   <view class="section-card compact-section">
     <view class="section-title">排版方式</view>
-    <view class="algorithm-row">
-      <view class="algorithm-option {{project.algorithm === 'standard' ? 'active' : ''}}" data-algorithm="standard" bindtap="setAlgorithm"><view class="algorithm-name">标准排版</view><view class="muted">尽量利用材料</view></view>
-      <view class="algorithm-option {{project.algorithm === 'fast' ? 'active' : ''}}" data-algorithm="fast" bindtap="setAlgorithm"><view class="algorithm-name">快切</view><view class="muted">减少现场搬动</view></view>
-    </view>
-    <view class="preset-slot {{project.algorithm === 'fast' ? 'active' : ''}}">
-      <picker mode="selector" range="{{fastPresetLabels}}" value="{{project.fastPreset === 'material' ? 0 : project.fastPreset === 'speed' ? 2 : 1}}" disabled="{{project.algorithm !== 'fast'}}" bindchange="setFastPreset"><view class="preset-picker">快切偏好：{{project.fastPreset === 'material' ? '节省材料' : project.fastPreset === 'speed' ? '优先快切' : '平衡'}} <text class="ui-icon chevron-icon">⌄</text></view></picker>
+    <view class="algorithm-note">
+      <view class="algorithm-name">标准排版</view>
+      <view class="muted">尽量利用材料 · 刀片宽度 4mm</view>
     </view>
   </view>
 
   <button class="primary-action" bindtap="handleSolve" loading="{{solving}}" disabled="{{busy}}">开始排版 <text class="ui-icon arrow-icon">→</text></button>
+
+  <!-- 下料工具进度浮层 -->
+  <view wx:if="{{progressTask}}" class="cut-progress-mask" aria-label="正在处理"></view>
+  <view wx:if="{{progressTask}}" class="cut-progress-dialog">
+    <view class="progress-ring" style="{{progressRingStyle}}">
+      <view class="progress-ring-inner"><text class="progress-number">{{progress}}</text><text class="progress-total">/100</text></view>
+    </view>
+    <view class="progress-copy">
+      <view class="progress-title">{{progressTask === 'ocr' ? '拍照识别' : progressTask === 'import' ? '导入表格' : '标准排版'}}</view>
+      <view class="muted">正在处理，请稍候…</view>
+    </view>
+  </view>
+</view>
+
+<!-- ==================== 工具二：视频去水印 ==================== -->
+<view class="page-shell watermark-page" hidden="{{tool !== 'watermark'}}">
+  <view class="hero-card">
+    <view>
+      <view class="eyebrow">VIDEO WATERMARK REMOVER</view>
+      <view class="hero-title">视频去水印</view>
+      <view class="hero-subtitle">选择平台，按需解析视频或语音文案</view>
+    </view>
+    <view class="hero-drop"></view>
+  </view>
+
+  <view class="section-card">
+    <view class="platform-field">
+      <view class="platform-field-label">视频平台</view>
+      <picker mode="selector" range="{{platforms}}" range-key="label" value="{{platformIndex}}" bindchange="changePlatform">
+        <view class="platform-picker">
+          <text>{{platformLabel}}</text>
+          <text class="platform-picker-arrow">›</text>
+        </view>
+      </picker>
+    </view>
+    <view class="section-title input-section-title">{{inputTitle}}</view>
+    <textarea
+      class="link-input"
+      value="{{link}}"
+      maxlength="1000"
+      placeholder="{{inputPlaceholder}}"
+      bindinput="updateLink"
+    />
+    <view class="parse-actions">
+      <button class="primary-action parse-action" bindtap="parseVideo" disabled="{{parsing || transcribing || saving}}">解析视频</button>
+      <button class="primary-action accent-action parse-action" bindtap="parseTranscript" disabled="{{parsing || transcribing || saving}}">解析文案</button>
+    </view>
+  </view>
+
+  <view wx:if="{{result}}" class="section-card result-card">
+    <view class="result-heading">
+      <view class="section-title">解析结果</view>
+      <view class="platform-badge">{{result.platformLabel || platformLabel}}</view>
+    </view>
+    <video class="video-preview" src="{{videoUrl}}" controls object-fit="contain" show-center-play-btn></video>
+    <view class="result-actions single-result-action">
+      <button class="primary-action result-action" bindtap="saveVideo" disabled="{{saving || parsing || transcribing}}">保存视频</button>
+    </view>
+  </view>
+
+  <view wx:if="{{transcriptRequested}}" class="section-card result-card">
+    <view class="section-title">文案结果</view>
+    <view class="caption-box transcript-only-box">
+      <view class="caption-label">视频语音文案</view>
+      <view class="caption-content {{transcriptExpanded ? 'caption-content-expanded' : ''}} {{transcriptCanExpand && !transcriptExpanded ? 'caption-content-collapsed' : ''}}">
+        <text class="caption-text">{{transcript || transcriptError || '未识别到清晰人声'}}</text>
+      </view>
+      <button wx:if="{{transcriptCanExpand}}" class="caption-toggle" bindtap="toggleTranscript">
+        {{transcriptExpanded ? '收起文案' : '展开全文'}}
+      </button>
+    </view>
+    <view class="result-actions single-result-action">
+      <button class="primary-action accent-action result-action" bindtap="copyCaption" disabled="{{!transcript || transcribing}}">复制文案</button>
+    </view>
+  </view>
+
+  <!-- 去水印进度浮层 -->
+  <view wx:if="{{videoProgressTask}}" class="progress-overlay" aria-label="正在处理">
+    <view class="progress-dialog">
+      <view class="progress-ring" style="{{videoProgressRingStyle}}">
+        <view class="progress-ring-inner"><text class="progress-number">{{videoProgress}}</text><text class="progress-total">/100</text></view>
+      </view>
+      <view class="progress-copy">
+        <view class="progress-title">{{videoProgressTitle}}</view>
+        <view class="muted">{{videoProgressTask === 'save' ? (videoProgress >= 96 ? '正在保存到相册…' : '正在下载视频…') : videoProgressMessage}}</view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- ==================== 底部工具切换栏（页面内，不换 webview）==================== -->
+<view class="tab-bar">
+  <view
+    class="tab-item {{tool === 'cut' ? 'active' : ''}}"
+    data-tool="cut"
+    bindtap="switchTool"
+  >下料工具</view>
+  <view
+    class="tab-item {{tool === 'watermark' ? 'active' : ''}}"
+    data-tool="watermark"
+    bindtap="switchTool"
+  >视频去水印</view>
 </view>

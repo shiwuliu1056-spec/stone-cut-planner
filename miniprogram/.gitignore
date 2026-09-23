@@ -1,2 +1,5 @@
+# 文件用途：声明小程序目录中不应提交到 Git 的依赖、构建产物和工具生成配置。
 node_modules/
 miniprogram_npm/
+.cloudbase/
+.vscode/

@@ -1,6 +1,7 @@
+<!-- 文件用途：定义排版结果页的统计信息、母板图、切割信息和翻页结构。 -->
 <view class="page-shell result-page">
   <view class="result-head">
-    <view><view class="eyebrow">LAYOUT RESULT</view><view class="page-title">排版结果</view><view class="muted">网页版同款排版图 · 刀片宽度 4mm</view></view>
+    <view><view class="eyebrow">LAYOUT RESULT</view><view class="page-title">排版结果</view><view class="muted">排版图 · 刀片宽度 4mm</view></view>
     <text class="ui-icon check-icon">✓</text>
   </view>
 

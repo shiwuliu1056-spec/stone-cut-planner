@@ -1,3 +1,4 @@
+// 文件用途：处理拍照识别结果的校对、编辑、保存和返回下料页操作。
 const { loadProject, saveProject } = require('../../utils/project');
 
 Page({
