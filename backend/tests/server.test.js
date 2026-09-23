@@ -38,6 +38,44 @@ function stopServer(server) {
   return new Promise((resolve) => server.close(() => resolve()));
 }
 
+/**
+ * 轮询等待异步排版任务进入终态（succeeded / failed）。
+ *
+ * solve 跑在 worker 线程里，GitHub Actions runner 的冷启动与单核性能都明显弱于
+ * 开发机，所以写死的紧预算会随机超时：CI 上「结果超限…」用例原本用
+ * 150×20ms=3s，实测耗时 3052ms 刚好耗尽预算而间歇失败。
+ *
+ * 这里放宽到 20s，并在超时后把当前状态交给调用方，便于区分「真的卡住」和「只是慢」。
+ */
+async function waitForTaskState(
+  readState,
+  { timeoutMs = 20000, intervalMs = 25 } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  let state = await readState();
+  while (!state || !["succeeded", "failed"].includes(state.status)) {
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    state = await readState();
+  }
+  return state;
+}
+
+/**
+ * 轮询等待条件成立，超时返回 false。
+ *
+ * 用于替代写死的 `setTimeout(n)`：固定睡眠在本地很宽裕，到 CI 上可能就不够，
+ * 而轮询一旦条件满足就立即返回，既不拖慢本地也不在 CI 上翻车。
+ */
+async function waitUntil(predicate, { timeoutMs = 5000, intervalMs = 10 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return true;
+}
+
 function makeResult(slabCount = 1) {
   const slabs = [];
   for (let i = 1; i <= slabCount; i += 1) {
@@ -208,16 +246,17 @@ test("POST /api/solve/tasks 异步提交并可查询到完成结果", async () =
     const first = await submitted.json();
     assert.match(first.taskId, /^[0-9a-f-]{36}$/);
     assert.ok(["queued", "running"].includes(first.status));
-    let state;
-    for (let i = 0; i < 30; i += 1) {
+    const state = await waitForTaskState(async () => {
       const response = await fetch(
         `${baseUrl}/api/solve/tasks/${first.taskId}`,
       );
-      state = await response.json();
-      if (state.status === "succeeded") break;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    assert.equal(state.status, "succeeded");
+      return response.json();
+    });
+    assert.equal(
+      state.status,
+      "succeeded",
+      `任务未在预算内完成，当前状态：${state && state.status}`,
+    );
     assert.equal(state.progress, 100);
     assert.ok(state.result.plans.A);
   } finally {
@@ -717,8 +756,10 @@ test("任务 TTL 到期会移除任务和幂等索引", async () => {
   });
   const payload = { settings: { slabs: [] }, parts: [] };
   const { task } = manager.submit(payload, "ttl-key");
-  await new Promise((resolve) => setTimeout(resolve, 25));
-  assert.equal(manager.get(task.taskId), null);
+  assert.ok(
+    await waitUntil(() => manager.get(task.taskId) === null),
+    "TTL 到期后任务应被移除",
+  );
   assert.equal(manager.idempotency.has("ttl-key"), false);
   manager.close();
 });
@@ -840,9 +881,13 @@ test("worker 超时会将异步任务标记为失败", async () => {
     settings: { slabs: [] },
     parts: [],
   });
-  await new Promise((resolve) => setTimeout(resolve, 60));
-  assert.equal(manager.get(task.taskId).status, "failed");
-  assert.match(manager.get(task.taskId).error, /超时/);
+  const state = await waitForTaskState(() => manager.get(task.taskId));
+  assert.equal(
+    state.status,
+    "failed",
+    `worker 未在预算内超时，当前状态：${state && state.status}`,
+  );
+  assert.match(state.error, /超时/);
   manager.close();
 });
 
@@ -910,15 +955,12 @@ test("结果超限会删除结果字段且持久化文件不包含大结果", as
     },
     parts: [{ id: "A", w: 200, h: 100, qty: 20 }],
   });
-  for (
-    let i = 0;
-    i < 150 &&
-    !["succeeded", "failed"].includes(manager.get(task.taskId)?.status);
-    i += 1
-  )
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  const state = manager.get(task.taskId);
-  assert.equal(state.status, "failed");
+  const state = await waitForTaskState(() => manager.get(task.taskId));
+  assert.equal(
+    state.status,
+    "failed",
+    `任务未在预算内结束，当前状态：${state && state.status}`,
+  );
   assert.equal(state.result, undefined);
   manager.close();
   const stored = JSON.parse(fs.readFileSync(file, "utf8"));
