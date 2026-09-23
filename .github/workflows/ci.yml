@@ -20,15 +20,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
         run: npm --prefix backend ci
 
-      - name: Install frontend dependencies
-        run: npm --prefix frontend ci
-
-      - name: Run tests, lint, and production build
+      - name: Run backend tests
         run: npm test

@@ -2,24 +2,13 @@
   "name": "stone-cut-planner",
   "version": "1.1.0",
   "private": true,
-  "description": "石材下料规划工具",
+  "description": "宝松工具箱小程序：石材下料规划与视频去水印",
   "license": "MIT",
   "scripts": {
-    "install:backend": "npm --prefix backend install",
-    "install:frontend": "npm --prefix frontend install",
-    "postinstall": "npm run install:backend && npm run install:frontend",
-    "dev": "node backend/server.js",
-    "build": "npm run build:frontend",
-    "build:win8": "node scripts/build-win8.js",
-    "copy:vision-config": "node scripts/copy-vision-config.js",
-    "package:win8": "node scripts/package-win8.js",
-    "release:win8": "node scripts/release-win8.js",
-    "start": "node backend/server.js --prod",
-    "start:prod": "npm run build && npm run start",
-    "test:backend": "node --test backend/tests/*.test.js",
-    "lint:frontend": "npm --prefix frontend run lint",
-    "build:frontend": "node scripts/prepare-ocr-assets.js && npm --prefix frontend run build",
-    "test": "npm run test:backend && npm run lint:frontend && npm run build:frontend"
+    "postinstall": "npm --prefix backend install",
+    "dev": "node --env-file-if-exists=.env.local backend/server.js",
+    "start": "node backend/server.js",
+    "test": "node --test backend/tests/*.test.js"
   },
   "engines": {
     "node": ">=20.9.0"

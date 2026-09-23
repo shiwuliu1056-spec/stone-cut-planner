@@ -1,8 +1,12 @@
+# 文件用途：声明不提交到 Git 的依赖、构建产物、本机配置和密钥。
 node_modules/
 dist/
 .env
 .env.*
-eng.traineddata
 *.local
 .DS_Store
 npm-debug.log*
+
+# 本机密钥与微信开发者工具个人配置
+vision-config.json
+project.private.config.json

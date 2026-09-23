@@ -1,0 +1,16 @@
+# 文件用途：声明不进入容器镜像的文件，保持镜像精简且不含密钥。
+node_modules
+**/node_modules
+.git
+.gitignore
+*.zip
+.env
+.env.*
+
+# 密钥与本机配置
+vision-config.json
+vision-config.json.example
+project.private.config.json
+
+# 小程序源码不参与后端镜像构建
+miniprogram

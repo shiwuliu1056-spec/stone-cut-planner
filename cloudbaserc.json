@@ -1,0 +1,7 @@
+{
+  "envId": "cloud1-d7gxlhtv344e94d8e",
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "cloudrun": {
+    "name": "stone-cut-planner-api"
+  }
+}
