@@ -1,0 +1,2 @@
+@import "../../claim.wxss";
+.title{margin-bottom:16rpx}.shell>.muted{margin-bottom:24rpx}.section-title{font-weight:600;margin-bottom:16rpx}.file-row{display:flex;align-items:center;gap:12rpx;padding:20rpx 0;border-top:1rpx solid #edf0ec}.file-detail{flex:1;min-width:0;overflow-wrap:anywhere;font-size:26rpx}.file-row button{margin:0;padding:12rpx 16rpx;font-size:24rpx}

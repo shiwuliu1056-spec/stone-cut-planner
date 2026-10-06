@@ -1,0 +1,26 @@
+<view class="home-shell">
+  <view class="toolbox-return" bindtap="backToToolbox" hover-class="return-pressed" hover-start-time="0" role="button">返回工具箱</view>
+  <view class="hero-card">
+    <view class="hero-content">
+      <view class="eyebrow">九江·民事一审·买卖合同纠纷</view>
+      <view class="hero-title">起诉助手</view>
+      <view class="hero-subtitle">填写信息、整理材料，生成起诉资料</view>
+    </view>
+    <view class="hero-document"><view class="document-fold"></view><view class="document-line"></view><view class="document-line short"></view></view>
+  </view>
+  <view class="materials-card">
+    <view class="materials-heading"><text>案件资料</text><view class="heading-name"><text class="progress-label">已填写 {{completion}}%</text><button size="mini" class="clear-small" bindtap="clearCase">清空资料</button></view></view>
+    <view wx:for="{{steps}}" wx:key="index" class="material-row {{index === 4 ? 'last' : ''}}" data-step="{{index}}" bindtap="open">
+      <text class="material-number">0{{index + 1}}</text>
+      <text class="material-title">{{item}}</text>
+      <text class="material-percent">{{percentages[index]}}%</text>
+      <text class="material-arrow">›</text>
+    </view>
+  </view>
+  <view class="home-actions">
+    <button class="home-action start-action" bindtap="continueCase">填写资料</button>
+    <button class="home-action review-action" bindtap="review">检查下载</button>
+    <button class="home-action template-action" bindtap="manage">配置模板</button>
+    <button class="home-action sample-action" bindtap="useSample">使用示例</button>
+  </view>
+</view>

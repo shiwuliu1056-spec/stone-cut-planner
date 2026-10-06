@@ -1,4 +1,18 @@
-// 文件用途：统一封装 CloudBase、HTTP、文件上传下载、云服务预热与自动重试。
+// 文件用途：统一封装后端 HTTP 请求、本地文件读取、后端预热与自动重试。
+// 已完全脱离云开发：不使用 wx.cloud —— 既不用 callContainer（改走自建 HTTPS 域名），
+// 也不用云存储（导入表格改传二进制、拍照识别改传 base64，两条链路后端都已支持）。
+
+/** 请求失败后重试前的等待，按重试次数递增（1.2s、2.4s…）。 */
+const RETRY_DELAY_MS = 1200;
+
+/**
+ * 内联上传图片的体积上限。
+ *
+ * 图片走 base64 塞进 JSON 后会膨胀约 1/3，超过 wx.request 的请求体上限会被平台
+ * 直接拒绝且提示难以理解。这里提前拦住，让调用方给出可操作的提示。
+ */
+const MAX_INLINE_IMAGE_BYTES = 6 * 1024 * 1024;
+
 function getBaseUrl() {
   const app = getApp();
   return String(
@@ -11,199 +25,120 @@ function getAppConfig() {
   return (app && app.globalData) || {};
 }
 
+/** 判断当前后端地址是否指向本机（仅开发者工具会走到）。 */
+function isLocalBackend(baseUrl) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(baseUrl || "");
+}
+
 function networkRequestError(source) {
   const message = String((source && source.errMsg) || "").trim();
-  const config = getAppConfig();
-  if (
-    !config.useCloudContainer &&
-    config.localBackendInDevtools &&
-    /^request:fail\b/i.test(message)
-  ) {
-    const baseUrl = getBaseUrl();
+  // 只有确实指向本机后端时才提示启动本地服务；线上域名失败时这样提示会误导。
+  if (/^request:fail\b/i.test(message) && isLocalBackend(getBaseUrl())) {
     return new Error(
-      `本地后端连接失败，请先启动项目后端并确认 ${baseUrl || "127.0.0.1:3100"} 可访问`,
+      `本地后端连接失败，请先启动项目后端并确认 ${getBaseUrl() || "127.0.0.1:3100"} 可访问`,
     );
   }
   return new Error(message || "网络请求失败");
 }
 
-const CLOUD_RETRY_DELAY_MS = 1200;
-let cloudWarmPromise = null;
-
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function shouldUseCloudContainer() {
-  const config = getAppConfig();
-  return Boolean(
-    config.useCloudContainer &&
-      config.cloudEnvId &&
-      config.cloudServiceName &&
-      wx.cloud &&
-      wx.cloud.callContainer,
-  );
+/** 把响应体解析成对象：文本按 JSON 解析，解析失败返回空对象。 */
+function parseBody(data) {
+  if (typeof data !== "string") return data || {};
+  try {
+    return JSON.parse(data || "{}");
+  } catch {
+    return {};
+  }
 }
 
-function invokeCloudContainer(path, options = {}) {
-  const config = getAppConfig();
+function httpRequest(options) {
   return new Promise((resolve, reject) => {
-    wx.cloud.callContainer({
-      config: { env: config.cloudEnvId },
-      path,
-      method: options.method || "GET",
+    const baseUrl = getBaseUrl();
+    if (!baseUrl || baseUrl.includes("你的-api-域名")) {
+      reject(new Error("请先在 app.js 配置后端地址"));
+      return;
+    }
+    wx.request({
+      url: `${baseUrl}${options.path}`,
+      method: options.method,
       data: options.data,
-      header: {
-        "content-type": "application/json",
-        "X-WX-SERVICE": config.cloudServiceName,
-        ...(options.header || {}),
-      },
-      timeout: options.timeout || 30000,
-      dataType: options.dataType || "json",
+      header: options.header,
+      dataType: options.dataType,
+      responseType: options.responseType,
+      timeout: options.timeout,
       success(res) {
-        const data = res.data || {};
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(data);
-        } else {
-          const error = new Error(
-            data.error || `云托管请求失败（${res.statusCode}）`,
-          );
-          error.statusCode = res.statusCode;
-          reject(error);
+          resolve(res.data);
+          return;
         }
+        const body = parseBody(res.data);
+        const error = new Error(
+          body.error || `请求失败（${res.statusCode}）`,
+        );
+        error.statusCode = res.statusCode;
+        reject(error);
       },
       fail(source) {
-        const error = new Error(source.errMsg || "云托管请求失败");
-        error.code = source.errCode || source.code;
+        const error = networkRequestError(source);
+        error.isNetworkError = true;
         reject(error);
       },
     });
   });
 }
 
-function isTransientCloudError(error) {
-  const message = String((error && error.message) || "").toLowerCase();
-  const code = String((error && error.code) || "");
+/** 只重试网络层失败与 502/503/504：4xx 是业务结论，重试没有意义。 */
+function isRetriable(error) {
+  if (error && error.isNetworkError) return true;
   const status = Number(error && error.statusCode);
-  return (
-    code === "102002" ||
-    code === "-601001" ||
-    code === "-601008" ||
-    message.includes("102002") ||
-    message.includes("system error") ||
-    message.includes("timeout") ||
-    message.includes("超时") ||
-    message.includes("network") ||
-    message.includes("连接失败") ||
-    status === 502 ||
-    status === 503 ||
-    status === 504
-  );
+  return status === 502 || status === 503 || status === 504;
 }
 
-async function invokeCloudContainerWithRetry(path, options = {}) {
-  const retries = Number.isInteger(options.retries)
-    ? Math.max(0, options.retries)
+async function requestWithRetry(options) {
+  const { retries: rawRetries, ...requestOptions } = options;
+  const retries = Number.isInteger(rawRetries)
+    ? Math.max(0, rawRetries)
     : 1;
-  let attempt = 0;
-  while (true) {
+  for (let attempt = 0; ; attempt += 1) {
     try {
-      return await invokeCloudContainer(path, options);
+      return await httpRequest(requestOptions);
     } catch (error) {
-      if (attempt >= retries || !isTransientCloudError(error)) throw error;
-      attempt += 1;
-      await wait(CLOUD_RETRY_DELAY_MS * attempt);
+      if (attempt >= retries || !isRetriable(error)) throw error;
+      await wait(RETRY_DELAY_MS * (attempt + 1));
     }
   }
 }
 
-// 预热只负责在后台提前拉起云托管容器：每次启动/回前台各触发一次，
-// 不缓存结果、不阻塞真实请求。冷启动等待由首个真实请求自己承担，
-// 并发去重只用于避免同时发出多个健康检查。
-function ensureCloudReady() {
-  if (!shouldUseCloudContainer()) return Promise.resolve(true);
-  if (cloudWarmPromise) return cloudWarmPromise;
-  cloudWarmPromise = invokeCloudContainerWithRetry("/api/health", {
-    timeout: 35000,
-    retries: 1,
-  })
-    .then((result) => Boolean(result && result.ok))
-    .finally(() => {
-      cloudWarmPromise = null;
-    });
-  return cloudWarmPromise;
-}
-
 function requestJson(path, options = {}) {
-  if (shouldUseCloudContainer())
-    return invokeCloudContainerWithRetry(path, options);
-  const baseUrl = getBaseUrl();
-  if (!baseUrl || baseUrl.includes("你的-api-域名")) {
-    return Promise.reject(new Error("请先在 app.js 配置 API 地址"));
-  }
-  return new Promise((resolve, reject) => {
-    wx.request({
-      url: `${baseUrl}${path}`,
-      method: options.method || "GET",
-      data: options.data,
-      header: { "content-type": "application/json", ...(options.header || {}) },
-      timeout: options.timeout || 30000,
-      success(res) {
-        const data = res.data || {};
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve(data);
-        else reject(new Error(data.error || `请求失败（${res.statusCode}）`));
-      },
-      fail(error) {
-        reject(networkRequestError(error));
-      },
-    });
+  return requestWithRetry({
+    path,
+    method: options.method || "GET",
+    data: options.data,
+    header: { "content-type": "application/json", ...(options.header || {}) },
+    dataType: options.dataType || "json",
+    timeout: options.timeout || 30000,
+    retries: options.retries,
   });
 }
 
 function requestBinary(path, data, options = {}) {
-  if (shouldUseCloudContainer()) {
-    return invokeCloudContainerWithRetry(path, {
-      ...options,
-      data,
-      dataType: "text",
-      header: {
-        "content-type": "application/octet-stream",
-        ...(options.header || {}),
-      },
-    });
-  }
-  const baseUrl = getBaseUrl();
-  if (!baseUrl || baseUrl.includes("你的-api-域名")) {
-    return Promise.reject(new Error("请先在 app.js 配置 API 地址"));
-  }
-  return new Promise((resolve, reject) => {
-    wx.request({
-      url: `${baseUrl}${path}`,
-      method: options.method || "POST",
-      data,
-      header: {
-        "content-type": "application/octet-stream",
-        ...(options.header || {}),
-      },
-      dataType: "text",
-      responseType: "text",
-      timeout: options.timeout || 30000,
-      success(res) {
-        let body = {};
-        try {
-          body =
-            typeof res.data === "string"
-              ? JSON.parse(res.data || "{}")
-              : res.data || {};
-        } catch {}
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve(body);
-        else reject(new Error(body.error || `请求失败（${res.statusCode}）`));
-      },
-      fail(error) {
-        reject(networkRequestError(error));
-      },
-    });
-  });
+  return requestWithRetry({
+    path,
+    method: options.method || "POST",
+    data,
+    header: {
+      "content-type": "application/octet-stream",
+      ...(options.header || {}),
+    },
+    dataType: "text",
+    responseType: "text",
+    timeout: options.timeout || 60000,
+    retries: options.retries,
+  }).then(parseBody);
 }
 
 function readLocalFile(filePath, encoding) {
@@ -217,60 +152,55 @@ function readLocalFile(filePath, encoding) {
   });
 }
 
-function uploadCloudFile(filePath, prefix = "uploads", onProgress) {
-  const config = getAppConfig();
-  if (!config.cloudEnvId || !wx.cloud || !wx.cloud.uploadFile)
-    return Promise.reject(new Error("云存储能力不可用"));
-  const extension = String(
-    filePath.match(/\.([a-z0-9]+)$/i)?.[1] || "bin",
-  ).toLowerCase();
-  const cloudPath = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
-  return new Promise((resolve, reject) => {
-    const task = wx.cloud.uploadFile({
-      cloudPath,
-      filePath,
-      success: resolve,
-      fail: (error) => reject(new Error(error.errMsg || "文件上传失败")),
-    });
-    if (task && typeof task.onProgressUpdate === "function") {
-      task.onProgressUpdate((event) =>
-        onProgress?.(Number(event.progress) || 0),
+/**
+ * 把本地图片读成可直接提交的 data URL，并做体积保护。
+ *
+ * 图片走 base64 塞进 JSON 会膨胀约 1/3，超过 wx.request 的请求体上限会被平台直接
+ * 拒绝且提示难以理解。这里按 base64 实际长度反推原始字节数，提前给出可操作提示。
+ */
+function readLocalImageAsDataUrl(filePath, mime) {
+  return readLocalFile(filePath, "base64").then((base64) => {
+    const bytes = Math.floor((String(base64).length * 3) / 4);
+    if (bytes > MAX_INLINE_IMAGE_BYTES) {
+      return Promise.reject(
+        new Error(
+          `照片过大（${(bytes / 1048576).toFixed(1)}MB），请压缩或重新拍摄后再试`,
+        ),
       );
     }
+    return `data:${mime};base64,${base64}`;
   });
 }
 
-function getCloudTempUrl(fileID) {
-  if (!fileID || !wx.cloud || !wx.cloud.getTempFileURL)
-    return Promise.reject(new Error("云文件地址不可用"));
-  return new Promise((resolve, reject) =>
-    wx.cloud.getTempFileURL({
-      fileList: [fileID],
-      success: (res) => {
-        const url =
-          res.fileList && res.fileList[0] && res.fileList[0].tempFileURL;
-        if (url) resolve(url);
-        else reject(new Error("无法获取云文件地址"));
-      },
-      fail: (error) => reject(new Error(error.errMsg || "无法获取云文件地址")),
-    }),
-  );
-}
+// 预热只负责在后台提前叫醒后端：每次启动/回前台各触发一次，
+// 不缓存结果、不阻塞真实请求。并发去重只用于避免同时发出多个健康检查。
+let warmPromise = null;
 
-function deleteCloudFile(fileID) {
-  if (!fileID || !wx.cloud || !wx.cloud.deleteFile) return Promise.resolve();
-  return new Promise((resolve) =>
-    wx.cloud.deleteFile({ fileList: [fileID], complete: resolve }),
-  );
+function ensureBackendReady() {
+  const config = getAppConfig();
+  if (!config || !config.apiBaseUrl) return Promise.resolve(true);
+  if (warmPromise) return warmPromise;
+  warmPromise = requestWithRetry({
+    path: "/api/health",
+    method: "GET",
+    header: { "content-type": "application/json" },
+    dataType: "json",
+    timeout: 35000,
+    retries: 1,
+  })
+    .then((result) => Boolean(result && result.ok))
+    .finally(() => {
+      warmPromise = null;
+    });
+  return warmPromise;
 }
 
 module.exports = {
-  deleteCloudFile,
-  ensureCloudReady,
+  MAX_INLINE_IMAGE_BYTES,
+  ensureBackendReady,
   getBaseUrl,
-  getCloudTempUrl,
   readLocalFile,
+  readLocalImageAsDataUrl,
   requestBinary,
   requestJson,
-  uploadCloudFile,
 };

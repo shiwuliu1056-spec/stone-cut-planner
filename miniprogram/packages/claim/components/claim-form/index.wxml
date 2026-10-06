@@ -1,0 +1,94 @@
+<view class="shell {{checkKind === 'ai' ? 'ai-check-context' : ''}}">
+  <view wx:if="{{step < 5}}" class="row heading"><view class="heading-copy"><view class="heading-counter">栏目 {{step + 1}} / 5</view><view class="heading-title">{{title}}</view></view><view class="heading-status"><view>自动保存</view><view>自动同步</view></view></view>
+  <view wx:if="{{template}}" class="template-note">
+    <text class="badge">{{template.badge}}</text>
+    <view class="muted">{{template.name}}</view>
+  </view>
+  <view wx:if="{{focusKey === 'column'}}" id="focus-column" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view>
+  <view wx:if="{{step < 5}}" class="card">
+    <view wx:for="{{fields}}" wx:key="key" class="field {{focusKey === item.key ? 'focus-highlight' : ''}}" id="field-{{item.key}}">
+      <view wx:if="{{focusKey === item.key}}" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view>
+      <view class="row"><text class="label">{{item.label}}</text><text wx:if="{{item.required}}" class="required">必填</text><switch wx:if="{{item.kind === 'switch'}}" checked="{{item.value}}" color="#173e38" data-key="{{item.key}}" bindchange="change"/></view>
+      <picker wx:if="{{item.kind === 'select'}}" range="{{item.options}}" value="{{item.choice}}" data-key="{{item.key}}" bindchange="change"><view class="control row"><text>{{item.display}}</text><text class="muted">选择 ›</text></view></picker>
+      <picker wx:elif="{{item.kind === 'date'}}" mode="date" value="{{item.value}}" data-key="{{item.key}}" bindchange="change"><view class="control">{{item.value || '选择日期'}}</view></picker>
+      <textarea wx:elif="{{item.kind === 'textarea'}}" class="control textarea" value="{{item.value}}" placeholder="{{item.placeholder || '按实际情况填写'}}" maxlength="3000" auto-height data-key="{{item.key}}" bindinput="input"/>
+      <input wx:elif="{{item.kind !== 'switch'}}" class="control" value="{{item.value}}" type="{{item.inputType}}" placeholder="{{item.placeholder || '请填写'}}" maxlength="500" data-key="{{item.key}}" bindinput="input"/>
+    </view>
+    <view wx:if="{{step === 0}}" class="field {{focusKey === 'jurisdictionBases' ? 'focus-highlight' : ''}}" id="field-jurisdictionBases"><view wx:if="{{focusKey === 'jurisdictionBases'}}" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view><view class="label">案件为什么由这个法院受理</view><checkbox-group bindchange="grounds"><label wx:for="{{grounds}}" wx:key="value" class="ground"><checkbox value="{{item.value}}" checked="{{item.checked}}" color="#173e38"/><text>{{item.label}}</text></label></checkbox-group></view>
+  </view>
+
+  <block wx:if="{{step === 1}}">
+    <view class="row group-heading" id="field-identityMaterials"><text class="label">我的身份证明材料</text><button size="mini" class="secondary" bindtap="addIdentity">＋ 添加材料</button></view>
+    <view wx:for="{{identityRows}}" wx:key="id" class="card {{focusKey === 'identityMaterials' && focusRowId === item.id ? 'focus-highlight' : ''}}" id="identity-row-{{item.id}}">
+      <view wx:if="{{focusKey === 'identityMaterials' && focusRowId === item.id}}" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view>
+      <view class="row"><text class="number">{{item.number}}</text><text class="muted">{{item.count}} 个文件</text><button wx:if="{{identityRows.length > 1}}" size="mini" class="delete" data-group="identityMaterials" data-id="{{item.id}}" bindtap="removeRow">删除</button></view>
+      <view class="field"><view class="row"><text class="label">材料名称</text><text class="link" data-id="{{item.id}}" bindtap="preset">选择常用名称</text></view><input class="control" value="{{item.name}}" maxlength="100" data-group="identityMaterials" data-id="{{item.id}}" data-key="name" bindinput="rowInput"/></view>
+      <button class="upload" data-group="plaintiff" data-id="{{item.id}}" bindtap="chooseFiles">＋ 选择本组文件</button>
+      <view class="muted">图片、PDF、DOCX；每个文件不超过20MB</view>
+      <view wx:for="{{item.files}}" wx:for-item="file" wx:key="id" class="file-row"><text class="filename" data-id="{{file.id}}" bindtap="previewImage">{{file.name}}</text><text class="delete" data-id="{{file.id}}" bindtap="removeFile">移除</text></view>
+    </view>
+    <view wx:if="{{state.represented === 'yes'}}" class="card {{focusKey === 'agentFiles' ? 'focus-highlight' : ''}}" id="field-agentFiles"><view wx:if="{{focusKey === 'agentFiles'}}" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view><view class="label">代理材料（单独生成Word）</view><button class="upload" data-group="agent" bindtap="chooseFiles">＋ 选择授权委托及代理身份证明</button><view wx:for="{{looseFiles}}" wx:key="id" class="file-row"><text class="filename">{{item.name}}</text><text class="delete" data-id="{{item.id}}" bindtap="removeFile">移除</text></view></view>
+  </block>
+
+  <block wx:if="{{step === 2}}">
+    <view class="row group-heading" id="field-defendantFiles"><text class="label">被告线索材料（辅助）</text><button size="mini" class="secondary" bindtap="addDefendant">＋ 添加材料</button></view>
+    <view wx:for="{{defendantRows}}" wx:key="id" class="card {{focusKey === 'defendantFiles' && focusRowId === item.id ? 'focus-highlight' : ''}}" id="defendant-row-{{item.id}}">
+      <view wx:if="{{focusKey === 'defendantFiles' && focusRowId === item.id}}" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view>
+      <view class="row"><text class="number">{{item.number}}</text><text class="muted">{{item.count}} 个文件</text><button wx:if="{{defendantRows.length > 1}}" size="mini" class="delete" data-group="defendantMaterials" data-id="{{item.id}}" bindtap="removeRow">删除</button></view>
+      <view class="field"><view class="label">材料名称</view><input class="control" value="{{item.name}}" placeholder="例如：工商登记信息、经营地址照片" maxlength="100" data-group="defendantMaterials" data-id="{{item.id}}" data-key="name" bindinput="rowInput"/></view>
+      <button class="upload" data-group="defendant" data-id="{{item.id}}" bindtap="chooseFiles">＋ 选择本组文件</button>
+      <view wx:for="{{item.files}}" wx:for-item="file" wx:key="id" class="file-row"><text class="filename" data-id="{{file.id}}" bindtap="previewImage">{{file.name}}</text><text class="delete" data-id="{{file.id}}" bindtap="removeFile">移除</text></view>
+    </view>
+  </block>
+
+  <block wx:if="{{step === 3}}">
+    <view class="{{focusKey === 'evidence' && !focusRowId ? 'focus-highlight' : ''}}" id="field-evidence"><view wx:if="{{focusKey === 'evidence' && !focusRowId}}" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view><view class="row group-heading"><text class="label">按编号整理证据</text><button size="mini" class="secondary" bindtap="addEvidence">＋ 添加证据</button></view></view>
+    <view wx:for="{{evidenceRows}}" wx:key="id" class="card {{focusKey === 'evidence' && focusRowId === item.id ? 'focus-highlight' : ''}}" id="evidence-row-{{item.id}}">
+      <view wx:if="{{focusKey === 'evidence' && focusRowId === item.id}}" class="focus-notice"><view class="focus-marker"><text>{{checkTotal ? checkLabel+' '+(checkIndex+1)+'/'+checkTotal : '请核对这里'}}</text></view><view class="focus-advice">{{focusHint}}</view><button wx:if="{{canOptimize}}" class="primary optimize-button" size="mini" loading="{{optimizeBusy}}" disabled="{{optimizeBusy}}" bindtap="optimize">一键优化</button></view>
+      <view class="row"><text class="number">{{item.number}}</text><text class="badge">{{item.kind === 'media' ? '影音证据' : '图文证据'}}</text><button size="mini" class="delete" data-group="evidence" data-id="{{item.id}}" bindtap="removeRow">删除</button></view>
+      <view class="field"><view class="label">证据名称</view><input class="control" value="{{item.name}}" placeholder="例如：送货单、微信催款记录" maxlength="100" data-group="evidence" data-id="{{item.id}}" data-key="name" bindinput="rowInput"/></view>
+      <block wx:if="{{item.kind === 'media'}}">
+        <view class="field"><view class="label">录音还是视频</view><picker range="{{['录音','视频']}}" value="{{item.mediaType === '录音' ? 0 : 1}}" data-id="{{item.id}}" data-key="mediaType" bindchange="rowChange"><view class="control">{{item.mediaType}}</view></picker></view>
+        <view class="field"><view class="label">文件数量</view><input class="control" type="number" value="{{item.fileCount}}" maxlength="5" data-group="evidence" data-id="{{item.id}}" data-key="fileCount" bindinput="rowInput"/></view>
+        <view class="note">影音原文件不上传到本助手。目录会注明：请在法院平台另行上传。</view>
+      </block>
+      <block wx:else>
+        <view class="field"><view class="label">原件 / 复印件</view><picker range="{{['原件','复印件']}}" value="{{item.copyType === '原件' ? 0 : 1}}" data-id="{{item.id}}" data-key="copyType" bindchange="rowChange"><view class="control">{{item.copyType}}</view></picker></view>
+        <button class="upload" data-group="evidence" data-id="{{item.id}}" bindtap="chooseFiles">＋ 选择本编号下的文件</button><view class="muted">{{item.count}} 个文件 {{item.types}} · 页码生成后自动计算</view>
+        <view wx:for="{{item.files}}" wx:for-item="file" wx:key="id" class="file-row"><text class="filename" data-id="{{file.id}}" bindtap="previewImage">{{file.name}}</text><text class="delete" data-id="{{file.id}}" bindtap="removeFile">移除</text></view>
+      </block>
+      <view class="field"><view class="label">这份证据从哪里来</view><input class="control" value="{{item.source}}" maxlength="200" data-group="evidence" data-id="{{item.id}}" data-key="source" bindinput="rowInput"/></view>
+      <view class="field"><view class="label">它能证明什么</view><textarea class="control textarea" value="{{item.purpose}}" auto-height maxlength="1500" data-group="evidence" data-id="{{item.id}}" data-key="purpose" bindinput="rowInput"/></view>
+      <view wx:if="{{item.kind !== 'media'}}" class="field"><view class="label">备注</view><input class="control" value="{{item.note}}" placeholder="没有可留空" maxlength="300" data-group="evidence" data-id="{{item.id}}" data-key="note" bindinput="rowInput"/></view>
+    </view>
+  </block>
+
+  <block wx:if="{{step === 5}}">
+    <view class="card system-check-card">
+      <view class="row review-section-head"><text class="review-section-title">系统检查</text><text class="badge">{{completion}}%</text></view>
+      <view wx:if="{{!issues.length}}" class="note">未发现缺失项，可以生成文件。</view>
+      <view wx:for="{{issueGroups}}" wx:for-item="group" wx:key="step" class="review-group">
+        <view class="review-group-head" data-step="{{group.step}}" bindtap="toggleIssueGroup" aria-expanded="{{group.expanded}}"><view class="review-group-name"><text>{{group.title}}</text></view><view class="review-group-toggle"><text class="review-group-count"><text class="review-group-alert">！</text>{{group.items.length}}项</text><text class="review-group-chevron {{group.expanded ? 'expanded' : ''}}">›</text></view></view>
+        <block wx:if="{{group.expanded}}"><view wx:for="{{group.items}}" wx:key="sourceIndex" class="issue {{item.level}}" data-index="{{item.sourceIndex}}" bindtap="goIssue"><view class="row"><text>{{item.displayNumber}}. {{item.title}}</text><text>›</text></view><view class="muted">{{item.advice}}</view></view></block>
+      </view>
+    </view>
+    <view class="card">
+      <view class="row review-section-head"><text class="review-section-title">AI检查</text><button size="mini" class="secondary" loading="{{busy}}" disabled="{{busy}}" bindtap="review">开始检查</button></view>
+      <view wx:if="{{ai && !aiGroups.length}}" class="note">未发现需要修改的问题。</view>
+      <view wx:for="{{aiGroups}}" wx:for-item="group" wx:key="key" class="review-group">
+        <view class="review-group-head" data-key="{{group.key}}" bindtap="toggleAiGroup" aria-expanded="{{group.expanded}}"><view class="review-group-name"><text>{{group.title}}</text></view><view class="review-group-toggle"><text class="review-group-count"><text class="review-group-alert">！</text>{{group.items.length}}项</text><text class="review-group-chevron {{group.expanded ? 'expanded' : ''}}">›</text></view></view>
+        <block wx:if="{{group.expanded}}"><view wx:for="{{group.items}}" wx:key="sourceIndex" class="issue" data-index="{{item.sourceIndex}}" bindtap="goAiIssue"><view class="row"><text>{{item.displayNumber}}. {{item.title}}</text><text>›</text></view><view class="muted">{{item.advice}}</view></view></block>
+      </view>
+    </view>
+  </block>
+</view>
+<view class="footer {{fromReview && step < 5 ? 'review-navigation' : ''}}">
+  <block wx:if="{{fromReview && step < 5}}">
+    <button class="secondary" bindtap="previousCheck">上查</button>
+    <button class="primary return-review" bindtap="backToReview">返回检查页</button>
+    <button class="secondary" bindtap="nextCheck">下查</button>
+  </block>
+  <block wx:else>
+    <button wx:if="{{step === 5}}" class="secondary" bindtap="result">查看本案文件</button><button wx:else class="secondary" bindtap="previous">{{step ? '上一步' : '返回首页'}}</button><button wx:if="{{step < 4}}" class="primary" bindtap="next">下一步</button><button wx:elif="{{step === 4}}" class="primary" bindtap="next">检查下载</button><button wx:else class="primary" bindtap="generate">生成资料包</button>
+  </block>
+</view>

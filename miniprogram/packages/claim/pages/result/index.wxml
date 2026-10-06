@@ -1,0 +1,25 @@
+<home-nav id="claim-home-nav" title="{{pageTitle}}"/>
+<view class="shell">
+  <view wx:if="{{busy || failed}}" class="card">
+    <view class="row"><text>{{failed ? '生成未完成' : '正在生成资料包'}}</text><text wx:if="{{result && busy}}" class="badge">{{result.progress}}%</text></view>
+    <progress wx:if="{{result && busy}}" percent="{{result.progress}}" activeColor="#173e38" backgroundColor="#e8eee8"/>
+    <view class="note {{failed ? 'error' : ''}}">{{message}}</view>
+    <button wx:if="{{failed}}" class="primary" bindtap="generate">重新生成资料包</button>
+  </view>
+  <view wx:if="{{!result && !busy && !failed}}" class="card empty">还没有生成资料包。</view>
+  <view wx:if="{{result && !busy && !failed && (stale || result.status === 'uploading' || result.status === 'failed')}}" class="card">
+    <view class="note">需要重新生成资料包。</view><button class="primary" bindtap="generate">生成资料包</button>
+  </view>
+  <view wx:if="{{result && result.status === 'ready' && !stale && !busy && !failed}}">
+    <view class="card"><view class="document-name">完整资料包</view><view class="muted">可编辑Word、文档内原始文件、影音另行上传清单</view><view class="actions"><button class="primary" bindtap="downloadPackage">下载</button><button class="secondary" data-package="1" bindtap="share">转发</button></view></view>
+    <view class="card pdf-list">
+      <view wx:for="{{result.outputs}}" wx:key="id" class="pdf-row {{index === result.outputs.length - 1 ? 'last' : ''}}">
+        <view class="pdf-detail"><view class="pdf-name">{{item.name}}</view><view class="pdf-source"><text class="pdf-source-badge">{{item.template.badge}}</text><view class="pdf-source-name">{{item.template.name}}</view></view></view>
+        <view class="pdf-row-actions">
+          <button class="icon-button" hover-class="icon-button-active" data-index="{{index}}" bindtap="open" aria-label="{{'查看' + item.name}}"><image class="action-icon" src="/packages/claim/assets/eye.svg" mode="aspectFit"/></button>
+          <button class="icon-button" hover-class="icon-button-active" data-index="{{index}}" bindtap="share" aria-label="{{'转发' + item.name}}"><image class="action-icon" src="/packages/claim/assets/forward.svg" mode="aspectFit"/></button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

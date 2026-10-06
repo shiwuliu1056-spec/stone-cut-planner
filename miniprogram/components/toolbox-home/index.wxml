@@ -1,0 +1,24 @@
+<view class="toolbox-home">
+  <view class="toolbox-brand">
+    <view class="toolbox-brand-copy">
+      <view class="toolbox-kicker">BAOSONG / TOOLBOX</view>
+      <view class="toolbox-title">宝松工具箱</view>
+      <view class="toolbox-tagline">拥抱AI<text class="toolbox-tagline-gap">提高效率</text></view>
+    </view>
+    <image class="toolbox-brand-art" src="/assets/toolbox/brand.svg" mode="aspectFit" aria-hidden="true" />
+  </view>
+  <view class="toolbox-directory">
+    <view class="toolbox-heading"><text>选择工具</text><text class="toolbox-count">03 / TOOLS</text></view>
+    <view class="toolbox-list">
+      <view wx:for="{{tools}}" wx:key="id" class="toolbox-card toolbox-tool-{{item.id}}" data-tool="{{item.id}}" bindtap="selectTool" hover-class="toolbox-card-pressed" hover-start-time="0" hover-stay-time="120" role="button" aria-label="{{item.name}}，{{item.description}}">
+        <text class="toolbox-number">{{item.number}}</text>
+        <view class="toolbox-copy">
+          <view class="toolbox-name">{{item.name}}</view>
+          <view class="toolbox-description">{{item.description}}</view>
+          <view wx:if="{{item.scope}}" class="toolbox-scope">{{item.scope}}</view>
+        </view>
+        <image class="toolbox-art" src="{{item.image}}" mode="aspectFit" aria-hidden="true" />
+      </view>
+    </view>
+  </view>
+</view>

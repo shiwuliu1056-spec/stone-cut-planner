@@ -1,0 +1,14 @@
+<view class="shell">
+  <view wx:for="{{sections}}" wx:key="role" wx:for-item="section" class="template-section">
+    <view class="card">
+      <view class="row"><view class="title">{{section.title}}</view><button class="secondary" size="mini" data-role="{{section.role}}" bindtap="add">＋ 新增</button></view>
+      <view class="muted">{{section.hint}}</view>
+      <view wx:if="{{!section.items.length}}" class="empty">还没有模板，可以新增一个。</view>
+    </view>
+    <view wx:for="{{section.items}}" wx:key="id" class="card">
+      <view class="row"><view class="template-name">{{item.label}}</view><text class="badge">{{item.type}}</text></view>
+      <view class="muted">{{item.name}} · {{item.count}} 个文件</view>
+      <view class="actions"><button class="primary" data-id="{{item.id}}" data-role="{{section.role}}" bindtap="use">使用</button><button class="secondary" data-id="{{item.id}}" data-role="{{section.role}}" bindtap="edit">编辑</button><button class="secondary" data-id="{{item.id}}" data-role="{{section.role}}" bindtap="remove">删除</button></view>
+    </view>
+  </view>
+</view>

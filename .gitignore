@@ -3,6 +3,7 @@ node_modules/
 dist/
 .env
 .env.*
+!claim-backend/.env.example
 *.local
 .DS_Store
 npm-debug.log*
@@ -10,3 +11,5 @@ npm-debug.log*
 # 本机密钥与微信开发者工具个人配置
 vision-config.json
 project.private.config.json
+claim-backend/test-output/
+test-output/

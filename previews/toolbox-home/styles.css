@@ -1,0 +1,95 @@
+/* 独立视觉预览，不依赖小程序样式、不请求远程资源。 */
+:root {
+  color-scheme: light;
+  --green: #173e38;
+  --gold: #c99352;
+  --paper: #f7f5f0;
+  --ink: #20332f;
+  --muted: #7b8883;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--ink);
+  background: #e8e7e1;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button { font: inherit; }
+svg { display: block; }
+.phone {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  min-height: 100svh;
+  margin: 0 auto;
+  padding-bottom: max(42px, env(safe-area-inset-bottom));
+  background: var(--paper);
+}
+.platform-chrome { color: white; background: var(--green); }
+.status-bar { display: flex; justify-content: space-between; align-items: center; height: 48px; padding: 10px 25px 0; }
+.clock { font-size: 15px; font-weight: 600; }
+.status-icons { display: flex; align-items: center; gap: 5px; }
+.status-icons svg { width: 17px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.status-icons .battery { width: 26px; }
+.wechat-bar { position: relative; display: flex; align-items: center; justify-content: center; height: 44px; font-size: 16px; font-weight: 600; }
+.wechat-capsule { position: absolute; right: 12px; display: flex; justify-content: space-around; align-items: center; width: 86px; height: 30px; border: 1px solid #ffffff36; border-radius: 18px; }
+.dots { margin-top: -2px; font-size: 17px; letter-spacing: 1px; }
+.wechat-capsule i { height: 17px; width: 1px; background: #ffffff36; }
+.close-ring { width: 15px; height: 15px; border: 2px solid white; border-radius: 50%; }
+.close-ring::after { content: ""; display: block; width: 5px; height: 5px; margin: 3px; border-radius: 50%; background: white; }
+.brand { position: relative; overflow: hidden; height: 152px; padding: 23px 24px 28px; color: white; background: var(--green); border-radius: 0 0 28px 0; }
+.brand-copy { position: relative; z-index: 1; }
+.brand-kicker { font-size: 10px; letter-spacing: 2px; color: #d8b37a; }
+h1 { margin: 13px 0 8px; font-size: 31px; line-height: 1.3; letter-spacing: 1px; font-weight: 600; }
+.brand p { margin: 0; font-size: 13px; color: #ffffffad; letter-spacing: 1px; }
+.tagline-gap { margin-left: 12px; }
+.brand-art { position: absolute; width: 150px; height: 150px; right: -18px; top: 12px; stroke: #d8b37a; stroke-width: 1; opacity: .18; }
+main { padding: 25px 20px 0; }
+.directory-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 17px; }
+h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .5px; }
+.directory-heading > span { font-size: 10px; letter-spacing: 1.4px; color: var(--muted); }
+.tool-list { display: grid; gap: 13px; }
+.tool-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 80px;
+  column-gap: 12px;
+  align-items: center;
+  width: 100%;
+  height: 148px;
+  padding: 20px;
+  overflow: hidden;
+  border: 1px solid #173e3817;
+  border-radius: 19px;
+  background: #fffefa;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.tool-card:active { transform: scale(.985); background: #edf2ec; border-color: #173e3850; }
+.tool-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+.tool-copy { position: relative; z-index: 1; display: block; min-width: 0; }
+.tool-name { display: block; margin: 0 0 8px; font-size: 22px; line-height: 29px; font-weight: 600; letter-spacing: .5px; color: var(--green); }
+.tool-number { align-self: start; padding-top: 1px; color: var(--gold); font-size: 11px; line-height: 15px; font-weight: 500; letter-spacing: 1px; }
+.tool-description { display: block; font-size: 12px; line-height: 19px; color: #69766f; }
+.tool-scope { display: block; margin-top: 7px; color: #887451; font-size: 10px; line-height: 14px; }
+.tool-art { width: 80px; height: 72px; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.art-wash { fill: #edf1e8; }
+.art-faint { stroke: #a5b6a7; }
+.art-line { stroke: #426359; }
+.art-fill { fill: #dce6da; stroke: #6a8575; }
+.art-accent { stroke: var(--gold); }
+.art-accent-fill { fill: #e7cca5; stroke: #b48b53; }
+.art-paper { fill: #fffefa; stroke: #557367; }
+.check { stroke: #5c6041; stroke-width: 2; }
+.home-indicator { position: absolute; bottom: 9px; left: 50%; width: 120px; height: 4px; border-radius: 4px; transform: translateX(-50%); background: #20332f; }
+@media (max-width: 380px) {
+  main { padding-right: 18px; padding-left: 18px; }
+  .tool-card { padding-right: 18px; padding-left: 18px; grid-template-columns: 18px minmax(0, 1fr) 74px; column-gap: 10px; }
+  .tool-art { width: 74px; height: 68px; }
+  .tool-description { font-size: 11.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-card { transition: none; }
+}

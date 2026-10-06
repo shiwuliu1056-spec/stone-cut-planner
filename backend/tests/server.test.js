@@ -301,7 +301,7 @@ test("查询不存在的异步任务返回 404", async () => {
   }
 });
 
-test("GET /api/health 返回云托管预热状态", async () => {
+test("GET /api/health 返回固定载荷（不含敏感信息，可安全作为预热探针）", async () => {
   const { server, baseUrl } = await startServer();
   try {
     const res = await fetch(`${baseUrl}/api/health`);

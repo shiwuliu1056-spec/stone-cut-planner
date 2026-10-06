@@ -1,9 +1,13 @@
 {
-  "navigationBarTitleText": "石材下料工具",
+  "navigationBarTitleText": "宝松工具箱",
+  "usingComponents": {
+    "toolbox-home": "/components/toolbox-home/index",
+    "claim-home": "/components/claim-home/index"
+  },
   "navigationBarBackgroundColor": "#173e38",
   "navigationBarTextStyle": "white",
-  "backgroundColor": "#173e38",
+  "backgroundColor": "#f7f5f0",
   "backgroundColorTop": "#173e38",
-  "backgroundColorBottom": "#173e38",
+  "backgroundColorBottom": "#f7f5f0",
   "backgroundTextStyle": "light"
 }

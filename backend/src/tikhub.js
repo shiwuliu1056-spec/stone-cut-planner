@@ -8,7 +8,7 @@ const https = require('node:https');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { createWechatDecryptTransform, generateWechatKeystream } = require('./wechat-decrypt');
-const { isPrivateAddress } = require('./remote');
+const { isPrivateAddress } = require('./private-address');
 
 const DEFAULT_API_ORIGIN = 'https://api.tikhub.dev';
 const TIKHUB_API_HOSTS = new Set(['api.tikhub.dev', 'api.tikhub.io']);

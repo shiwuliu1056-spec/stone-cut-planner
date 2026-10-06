@@ -4,8 +4,12 @@
     "pages/ocr-review/ocr-review",
     "pages/result/result"
   ],
+  "subpackages": [{
+    "root": "packages/claim",
+    "pages": ["pages/home/index", "pages/complaint/index", "pages/identity/index", "pages/defendant/index", "pages/evidence/index", "pages/service/index", "pages/review/index", "pages/result/index", "pages/settings/index", "pages/template-editor/index", "pages/case-files/index"]
+  }],
   "window": {
-    "navigationBarTitleText": "石材下料工具",
+    "navigationBarTitleText": "宝松工具箱",
     "navigationBarBackgroundColor": "#173e38",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#173e38",

@@ -1,0 +1,1 @@
+<view class="nav-placeholder" style="height:{{statusHeight + navHeight}}px"></view><view class="nav"><view style="height:{{statusHeight}}px"></view><view class="nav-row" style="height:{{navHeight}}px"><view class="home-button" bindtap="home" aria-label="返回起诉助手首页"><image src="/packages/claim/assets/home.svg"/></view><text class="nav-title">{{title}}</text></view></view>

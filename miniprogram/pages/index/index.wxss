@@ -18,44 +18,19 @@
 .hero-title { font-size: 42rpx; font-weight: 700; }
 .hero-subtitle { margin-top: 10rpx; color: rgba(255, 255, 255, 0.68); font-size: 24rpx; }
 
-/* ==================== 底部工具切换栏（页面内，不换 webview）==================== */
-.tab-bar {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 90;
-  display: flex;
-  box-sizing: border-box;
-  height: calc(108rpx + env(safe-area-inset-bottom));
-  padding: 12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
-  border-top: 1rpx solid rgba(23, 62, 56, 0.1);
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 -10rpx 30rpx rgba(23, 62, 56, 0.06);
-}
+/* 原底部工具切换栏已由首页入口取代。 */
+.tool-home-link { display:inline-flex; margin-bottom:24rpx; padding:8rpx 0; color:#7b8883; font-size:25rpx; }
 
-.tab-item {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  border-radius: 38rpx;
-  color: #7b8883;
-  font-size: 27rpx;
-  font-weight: 600;
-}
-
-.tab-item.active {
-  background: #edf4f0;
-  color: #173e38;
+/* 文字类可点元素的按下反馈。注意 <text> 不支持 hover-class，
+   所以只能用在 <view> 上（如「添加大板 / 添加小料」）。 */
+.tap-dim {
+  opacity: 0.5;
 }
 
 /* ==================== 工具一：石材下料 ==================== */
 .index-page {
   background-color: #f7f5f0;
-  padding-bottom: 280rpx;
-  padding-bottom: calc(280rpx + constant(safe-area-inset-bottom));
-  padding-bottom: calc(280rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(80rpx + env(safe-area-inset-bottom));
 }
 
 .cut-progress-mask {
@@ -119,7 +94,7 @@
 
 /* ==================== 工具二：视频去水印 ==================== */
 .watermark-page {
-  padding-bottom: 180rpx;
+  padding-bottom: calc(80rpx + env(safe-area-inset-bottom));
   background-color: #f7f5f0;
 }
 

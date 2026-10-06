@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "证据目录",
+  "usingComponents": {
+    "claim-form": "../../components/claim-form/index",
+    "home-nav": "/packages/claim/components/home-nav/index"
+  },
+  "navigationStyle": "custom"
+}

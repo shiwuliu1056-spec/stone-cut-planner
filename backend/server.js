@@ -3,7 +3,7 @@
 /**
  * server.js — 宝松工具箱小程序后端 HTTP 服务（唯一入口）
  *
- * 按 shared/API.md 实现接口：/api/import、/api/import-url、/api/ocr/*、
+ * 按 shared/API.md 实现接口：/api/import、/api/ocr/photo、
  * /api/solve、/api/solve/tasks、/api/video/*、/api/export、/api/export-word。
  * 排版算法委托 src/solver.js，导入导出委托 src/workbook.js。
  *
@@ -20,7 +20,6 @@ function getWorkbook() {
 }
 const { solve } = require("./src/solver");
 const { recognizePhoto } = require("./src/gemini-ocr");
-const { downloadHttps, imageMimeFromBuffer } = require("./src/remote");
 const { SolveTaskManager } = require("./src/solve-tasks");
 const tikHubVideoService = require("./src/tikhub");
 const transcriptServiceDefault = require("./src/transcript");
@@ -33,10 +32,6 @@ const LIMITS = {
   exportWord: 60 * 1024 * 1024,
   photoOcr: 22 * 1024 * 1024,
   videoLink: 16 * 1024,
-  remoteTimeoutMs: Math.max(
-    5000,
-    Number(process.env.REMOTE_DOWNLOAD_TIMEOUT_MS) || 60000,
-  ),
 };
 const MINI_PROGRAM_APP_ID =
   process.env.MINIPROGRAM_APP_ID || "wxe4560e02e4b75800";
@@ -152,21 +147,6 @@ async function handleImport(req, res) {
   sendJson(res, 200, { parts });
 }
 
-async function handleImportUrl(req, res) {
-  const body = await readJsonBody(req, LIMITS.solve);
-  if (!body || typeof body.url !== "string") {
-    sendError(res, 400, "缺少文件地址");
-    return;
-  }
-  const remote = await downloadHttps(
-    body.url,
-    LIMITS.import,
-    LIMITS.remoteTimeoutMs,
-  );
-  const parts = await getWorkbook().importParts(remote.buffer);
-  sendJson(res, 200, { parts });
-}
-
 async function handlePhotoOcr(req, res) {
   const body = await readJsonBody(req, LIMITS.photoOcr);
   if (!body || typeof body.image !== "string") {
@@ -174,27 +154,6 @@ async function handlePhotoOcr(req, res) {
     return;
   }
   const result = await recognizePhoto({ image: body.image, unit: body.unit });
-  sendJson(res, 200, result);
-}
-
-async function handlePhotoOcrUrl(req, res) {
-  const body = await readJsonBody(req, LIMITS.solve);
-  if (!body || typeof body.url !== "string") {
-    sendError(res, 400, "缺少图片地址");
-    return;
-  }
-  const remote = await downloadHttps(
-    body.url,
-    LIMITS.photoOcr,
-    LIMITS.remoteTimeoutMs,
-  );
-  const mime = imageMimeFromBuffer(remote.buffer);
-  if (!mime) {
-    sendError(res, 400, "远程文件不是支持的图片格式");
-    return;
-  }
-  const image = `data:${mime};base64,${remote.buffer.toString("base64")}`;
-  const result = await recognizePhoto({ image, unit: body.unit });
   sendJson(res, 200, result);
 }
 
@@ -449,9 +408,7 @@ function buildRoutes(
   return [
     { method: "GET", path: "/api/health", handler: handleHealth },
     { method: "POST", path: "/api/import", handler: handleImport },
-    { method: "POST", path: "/api/import-url", handler: handleImportUrl },
     { method: "POST", path: "/api/ocr/photo", handler: handlePhotoOcr },
-    { method: "POST", path: "/api/ocr/photo-url", handler: handlePhotoOcrUrl },
     { method: "POST", path: "/api/solve", handler: handleSolve },
     {
       method: "POST",

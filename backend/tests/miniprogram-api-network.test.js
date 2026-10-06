@@ -29,7 +29,6 @@ test("开发者工具本地后端不可达时显示可操作的诊断，不误�
   const api = loadApi(
     {
       localBackendInDevtools: true,
-      useCloudContainer: false,
       apiBaseUrl: "http://127.0.0.1:3100",
     },
     ({ fail }) => fail({ errMsg: "request:fail" }),
@@ -44,7 +43,6 @@ test("HTTP 响应错误保留后端业务提示，不改写 TikHub 解析结果"
   const api = loadApi(
     {
       localBackendInDevtools: true,
-      useCloudContainer: false,
       apiBaseUrl: "http://127.0.0.1:3100",
     },
     ({ success }) =>

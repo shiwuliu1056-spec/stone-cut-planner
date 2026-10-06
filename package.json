@@ -2,15 +2,19 @@
   "name": "stone-cut-planner",
   "version": "1.1.0",
   "private": true,
-  "description": "宝松工具箱小程序：石材下料规划与视频去水印",
+  "description": "宝松工具箱小程序：石材下料、视频去水印与起诉助手",
   "license": "MIT",
   "scripts": {
-    "postinstall": "npm --prefix backend install",
-    "dev": "node --env-file-if-exists=.env.local backend/server.js",
+    "postinstall": "npm --prefix backend install && npm --prefix claim-backend install",
+    "dev": "node scripts/dev.mjs",
+    "dev:tools": "node --env-file-if-exists=.env.local backend/server.js",
+    "dev:claim": "node --env-file-if-exists=claim-backend/.env claim-backend/server.mjs",
     "start": "node backend/server.js",
-    "test": "node --test backend/tests/*.test.js"
+    "start:claim": "node claim-backend/server.mjs",
+    "test": "node --test backend/tests/*.test.js && npm --prefix claim-backend test",
+    "test:claim": "npm --prefix claim-backend test"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22"
   }
 }

@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const storage = new Map(); let platform='devtools', loginCalls=0; const calls=[];
+global.wx={getDeviceInfo:()=>({platform}),getStorageSync:key=>storage.get(key),setStorageSync:(key,value)=>storage.set(key,value),login:options=>{loginCalls++;options.success({code:'wx-test-code'});},request:options=>{calls.push(options);options.success({statusCode:200,data:options.url.endsWith('/session')?{token:'test-token',expiresAt:Date.now()+3600000}:{ok:true}});}};
+const api=require('../../miniprogram/packages/claim/shared/api.js');
+const config=require('../../miniprogram/packages/claim/shared/config.js');
+test('local/cloud routing, separate addresses and local auth without wx.login',async()=>{
+  storage.set('claim-service-mode','cloud');storage.set('claim-cloud-base','https://ignored.example');
+  assert.equal(api.base(),'http://127.0.0.1:3101','旧UI配置不再影响开发配置');
+  await api.call('/check','POST',{});assert.equal(loginCalls,0);assert.ok(calls.find(x=>x.url.endsWith('/session')).data.devId);
+  config.defaultMode='cloud';config.localBaseUrl='http://localhost:3101';
+  assert.equal(api.base(),'https://cacci.cn/bstools');await api.call('/check','POST',{});assert.equal(loginCalls,1);
+  assert.ok(calls.find(x=>x.url==='https://cacci.cn/bstools/api/claim/session').data.code);
+  config.defaultMode='auto';
+  assert.equal(api.base(),'http://localhost:3101');await api.call('/check','POST',{});assert.equal(loginCalls,1,'自定义本机地址仍使用开发身份');
+  platform='ios';assert.equal(api.base(),'https://cacci.cn/bstools');
+  config.defaultMode='local';
+  await assert.rejects(()=>api.call('/check','POST',{}),/本地模式仅支持/);
+  config.defaultMode='auto';config.localBaseUrl='http://127.0.0.1:3101';
+});

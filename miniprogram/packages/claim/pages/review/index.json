@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "检查下载",
+  "usingComponents": {
+    "claim-form": "../../components/claim-form/index",
+    "home-nav": "/packages/claim/components/home-nav/index"
+  },
+  "navigationStyle": "custom"
+}

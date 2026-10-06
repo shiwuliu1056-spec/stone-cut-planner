@@ -1,6 +1,4 @@
-// 文件用途：单页承载「石材下料」与「视频去水印」两个工具的全部交互逻辑。
-// 两个工具用 data.tool 切换显隐（WXML 里走 hidden），不做页面跳转，
-// 因此不存在 webview 交换，也就不会出现 iOS 切换时的整屏白帧。
+// 工具目录与三个工具的总览同页显隐；起诉助手详细操作仍按需打开分包。
 const {
   defaultProject,
   loadProject,
@@ -8,12 +6,11 @@ const {
   saveProject,
 } = require("../../utils/project");
 const {
-  deleteCloudFile,
-  getCloudTempUrl,
+  getBaseUrl,
   readLocalFile,
+  readLocalImageAsDataUrl,
   requestBinary,
   requestJson,
-  uploadCloudFile,
 } = require("../../services/api");
 const { userMessage } = require("../../utils/errors");
 
@@ -54,10 +51,12 @@ const DEFAULT_PLATFORM_INDEX = Math.max(
 const DEFAULT_PLATFORM =
   VIDEO_PLATFORMS[DEFAULT_PLATFORM_INDEX] || VIDEO_PLATFORMS[0];
 
-/** 导航栏标题：单页承载两个工具，切工具时要手动同步原生导航栏标题 */
+/** 同页切换三个工具时同步原生导航栏标题。 */
 const TOOL_TITLES = {
+  home: "宝松工具箱",
   cut: "石材下料工具",
   watermark: "视频去水印",
+  claim: "起诉助手",
 };
 
 /* ---------------------------------------------------------------- 纯工具函数 */
@@ -86,13 +85,6 @@ function videoProgressPatch(value) {
   };
 }
 
-function publicApiBaseUrl() {
-  const app = getApp();
-  return String(
-    (app && app.globalData && app.globalData.publicApiBaseUrl) || "",
-  ).replace(/\/$/, "");
-}
-
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -101,8 +93,8 @@ function wait(ms) {
 
 Page({
   data: {
-    /** 当前工具：'cut' 石材下料 | 'watermark' 视频去水印 */
-    tool: "cut",
+    /** home 为工具目录；三个工具总览常驻并在同一页面内保留状态。 */
+    tool: "home",
 
     /* ---- 石材下料 ---- */
     project: defaultProject(),
@@ -148,12 +140,13 @@ Page({
     this.syncProject(loadProject());
     // 深链接：pages/index/index?tool=watermark 可直接落在去水印工具上。
     const requested = String((query && query.tool) || "");
-    const tool = requested === "watermark" ? "watermark" : "cut";
+    const tool = Object.prototype.hasOwnProperty.call(TOOL_TITLES, requested) ? requested : "home";
     if (tool !== this.data.tool) this.setData({ tool });
     this.applyToolTitle(tool);
   },
 
   onShow() {
+    this.applyToolTitle(this.data.tool);
     // 只在页面重新可见时校准草稿（例如从拍照识别页返回后）。
     // 工具切换不再触发 onShow，所以切换路径上没有任何 setData。
     const stored = loadProject();
@@ -164,6 +157,7 @@ Page({
 
   onUnload() {
     this.pageDestroyed = true;
+    if (this.toolNavigationTimer) clearTimeout(this.toolNavigationTimer);
     this.clearProgress();
     if (this.parseProgressTimer) clearInterval(this.parseProgressTimer);
     this.parseProgressTimer = null;
@@ -171,31 +165,51 @@ Page({
 
   /* ------------------------------------------------------------ 工具切换 */
 
-  switchTool(event) {
+  onHide() {
+    if (this.toolNavigationTimer) clearTimeout(this.toolNavigationTimer);
+    this.pauseVideo();
+  },
+
+  openTool(event) {
+    const tool = String((event.detail && event.detail.tool) || "");
+    this.switchTool({ currentTarget: { dataset: { tool } } });
+  },
+
+  backToToolbox() {
+    this.switchTool({ currentTarget: { dataset: { tool: "home" } } }, false);
+  },
+
+  pauseVideo() {
+    if (this.data.tool === "watermark" && this.data.videoUrl) {
+      wx.createVideoContext("watermarkVideo", this).pause();
+    }
+  },
+
+  switchTool(event, vibrate = true) {
     const tool = String(event.currentTarget.dataset.tool || "");
-    if (!tool || tool === this.data.tool) return;
+    if (!Object.prototype.hasOwnProperty.call(TOOL_TITLES, tool) || tool === this.data.tool) return;
     // 两个工具用 hidden 常驻，video 组件不会被销毁：切走时若不手动暂停，
     // 视频的音频会继续播。
-    if (this.data.tool === "watermark" && this.data.videoUrl) {
-      try {
-        wx.createVideoContext("watermarkVideo", this).pause();
-      } catch {
-        /* 部分环境下取不到上下文，忽略 */
-      }
-    }
+    this.pauseVideo();
     // 只切 hidden，不换 webview、不重建 DOM —— 这是消除切换白帧的关键。
+    // 这一步决定可见内容，让它单独占住这一轮，先把渲染发出去。
     this.setData({ tool });
-    this.applyToolTitle(tool);
-    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
-    // 震动延后一个 tick：vibrateShort 会同步调用系统震动服务，
-    // 先让它别挡在切换路径上。
-    setTimeout(() => wx.vibrateShort({ type: "light", fail: () => {} }), 0);
+    // 标题、滚动复位、震动都在非关键路径上，统一挪到下一个 tick：
+    // 它们每个都要过一次 JS↔原生桥，和上面那次渲染抢主线程只会拉长
+    // 「按下 → 画面响应」的间隔。
+    if (this.toolNavigationTimer) clearTimeout(this.toolNavigationTimer);
+    this.toolNavigationTimer = setTimeout(() => {
+      if (this.pageDestroyed || this.data.tool !== tool) return;
+      this.applyToolTitle(tool);
+      wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+      if (vibrate) wx.vibrateShort({ type: "light", fail: () => {} });
+    }, 0);
   },
 
   /** 同步原生导航栏标题（原本由各页 json 的 navigationBarTitleText 提供）*/
   applyToolTitle(tool) {
     wx.setNavigationBarTitle({
-      title: TOOL_TITLES[tool] || TOOL_TITLES.cut,
+      title: TOOL_TITLES[tool] || TOOL_TITLES.home,
       fail: () => {},
     });
   },
@@ -396,27 +410,10 @@ Page({
         }
         this.setData({ importing: true });
         const progressToken = this.beginProgress("import");
-        let cloudFileID = "";
         try {
-          let result;
-          if (getApp().globalData.useCloudContainer) {
-            const uploaded = await uploadCloudFile(
-              file.path,
-              "imports",
-              (value) => this.updateUploadProgress(progressToken, value),
-            );
-            cloudFileID = uploaded.fileID;
-            const url = await getCloudTempUrl(cloudFileID);
-            this.beginRequestProgress(progressToken);
-            result = await requestJson("/api/import-url", {
-              method: "POST",
-              data: { url },
-            });
-          } else {
-            const buffer = await readLocalFile(file.path);
-            this.beginRequestProgress(progressToken, 18);
-            result = await requestBinary("/api/import", buffer);
-          }
+          const buffer = await readLocalFile(file.path);
+          this.beginRequestProgress(progressToken, 18);
+          const result = await requestBinary("/api/import", buffer);
           if (!Array.isArray(result.parts) || !result.parts.length)
             throw new Error("表格中没有有效的小料");
           this.persist({ ...this.data.project, parts: result.parts });
@@ -434,7 +431,6 @@ Page({
               showCancel: false,
             });
         } finally {
-          await deleteCloudFile(cloudFileID);
           if (!this.pageDestroyed) this.setData({ importing: false });
           this.unlockBusy();
         }
@@ -471,7 +467,6 @@ Page({
         }
         this.setData({ ocrBusy: true });
         const progressToken = this.beginProgress("ocr");
-        let cloudFileID = "";
         try {
           let imagePath = file.tempFilePath;
           try {
@@ -487,42 +482,27 @@ Page({
           } catch {
             /* 部分开发者工具不支持压缩，继续使用原图 */
           }
-          let result;
-          if (getApp().globalData.useCloudContainer) {
-            const uploaded = await uploadCloudFile(imagePath, "ocr", (value) =>
-              this.updateUploadProgress(progressToken, value),
-            );
-            cloudFileID = uploaded.fileID;
-            const url = await getCloudTempUrl(cloudFileID);
-            this.beginRequestProgress(progressToken);
-            result = await requestJson("/api/ocr/photo-url", {
-              method: "POST",
-              data: { url, unit },
-              timeout: 60000,
-            });
-          } else {
-            const imageInfo = await new Promise((resolve, reject) =>
-              wx.getImageInfo({
-                src: imagePath,
-                success: resolve,
-                fail: reject,
-              }),
-            );
-            const type = String(
-              imageInfo.type ||
-                imagePath.match(/\.([a-z0-9]+)$/i)?.[1] ||
-                "jpeg",
-            ).toLowerCase();
-            const mime = type === "jpg" ? "jpeg" : type;
-            const base64 = await readLocalFile(imagePath, "base64");
-            const image = `data:image/${mime};base64,${base64}`;
-            this.beginRequestProgress(progressToken, 18);
-            result = await requestJson("/api/ocr/photo", {
-              method: "POST",
-              data: { image, unit },
-              timeout: 60000,
-            });
-          }
+          const imageInfo = await new Promise((resolve, reject) =>
+            wx.getImageInfo({
+              src: imagePath,
+              success: resolve,
+              fail: reject,
+            }),
+          );
+          const type = String(
+            imageInfo.type ||
+              imagePath.match(/\.([a-z0-9]+)$/i)?.[1] ||
+              "jpeg",
+          ).toLowerCase();
+          const mime = type === "jpg" ? "jpeg" : type;
+          // 内联上传：超体积会在这里提前报错，而不是被平台静默拒绝。
+          const image = await readLocalImageAsDataUrl(imagePath, mime);
+          this.beginRequestProgress(progressToken, 18);
+          const result = await requestJson("/api/ocr/photo", {
+            method: "POST",
+            data: { image, unit },
+            timeout: 60000,
+          });
           if (!Array.isArray(result.parts) || !result.parts.length)
             throw new Error("没有识别出有效尺寸，请换一张清晰照片");
           const app = getApp();
@@ -543,7 +523,6 @@ Page({
               showCancel: false,
             });
         } finally {
-          await deleteCloudFile(cloudFileID);
           if (!this.pageDestroyed) this.setData({ ocrBusy: false });
           this.unlockBusy();
         }
@@ -756,7 +735,7 @@ Page({
       ) {
         throw new Error("视频解析结果无效");
       }
-      const baseUrl = publicApiBaseUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) throw new Error("视频下载服务尚未配置");
       if (!(await this.completeParseProgress())) return;
       this.setData({

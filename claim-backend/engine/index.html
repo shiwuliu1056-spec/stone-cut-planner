@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="九江地区买卖合同欠款起诉资料整理工具" />
+    <title>九江货款起诉资料助手</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2311283f'/%3E%3Cpath d='M17 13h30v38H17z' fill='%23fff'/%3E%3Cpath d='M23 23h18M23 31h18M23 39h12' stroke='%2311283f' stroke-width='4'/%3E%3Ccircle cx='44' cy='45' r='10' fill='%23b9342b'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">诉</div>
+        <div>
+          <strong>九江货款起诉资料助手</strong>
+          <span>买卖合同纠纷 · 本机整理</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="button ghost" id="sampleBtn">填入示例</button>
+        <button type="button" class="button ghost danger-text" id="resetBtn">清空</button>
+        <button type="button" class="button primary" id="downloadAllBtn">下载资料包</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="rail" aria-label="填写步骤">
+        <div class="rail-title">案件资料</div>
+        <nav id="stepNav">
+          <button class="step-link active" data-step="0"><span>01</span><b>起诉状</b></button>
+          <button class="step-link" data-step="1"><span>02</span><b>当事人身份证明</b></button>
+          <button class="step-link" data-step="2"><span>03</span><b>被告线索（辅助）</b></button>
+          <button class="step-link" data-step="3"><span>04</span><b>证据目录</b></button>
+          <button class="step-link" data-step="4"><span>05</span><b>送达确认和收款账户</b></button>
+          <button class="step-link" data-step="5"><span>06</span><b>核对与下载</b></button>
+        </nav>
+        <div class="privacy-note">
+          <span class="lock-icon">●</span>
+          <div><strong>默认只在本机处理</strong><br />只有点击“AI检查”时才发送填写文字和材料清单，不发送上传的原文件。</div>
+        </div>
+      </aside>
+
+      <section class="form-panel">
+        <div class="form-heading">
+          <div>
+            <p class="eyebrow" id="stepEyebrow">步骤 1 / 6</p>
+            <h1 id="stepTitle">起诉状</h1>
+            <p id="stepDescription">填写起诉状需要的当事人、交易、诉讼请求和管辖信息。</p>
+          </div>
+          <div class="completion-badge"><strong id="completionText">0%</strong><span id="completionDetail">必选材料项 0/0</span></div>
+        </div>
+
+        <form id="caseForm" autocomplete="off">
+          <section class="form-step active" data-step-panel="0">
+            <div class="column-intro"><strong>本栏目生成：民事起诉状</strong><span>当事人、交易、诉讼请求和管辖信息都属于起诉状。后面栏目会再次展示部分问题，并自动同步这里的答案。</span></div>
+            <div class="party-card">
+              <div class="section-label with-tag">原告信息 <em>后续栏目自动同步</em></div>
+              <div class="field-grid two">
+                <label class="field"><span>我是</span><select data-field="plaintiffType"><option value="个人">个人</option><option value="个体工商户">个体工商户</option><option value="公司">公司</option></select></label>
+                <label class="field"><span>我的姓名或经营主体名称 <i>必填</i></span><input data-field="plaintiffName" placeholder="与身份证或营业执照一致" /></label>
+                <label class="field natural-only plaintiff-natural"><span>性别 <i>必填</i></span><select data-field="plaintiffGender"><option value="">请选择</option><option>男</option><option>女</option></select></label>
+                <label class="field"><span>国别或地区 <i>必填</i></span><input data-field="plaintiffCountry" placeholder="如：中国" /></label>
+                <label class="field natural-only plaintiff-natural"><span>证件类型 <i>必填</i></span><select data-field="plaintiffIdType"><option value="">请选择</option><option>居民身份证</option><option>护照</option><option>港澳居民来往内地通行证</option><option>台湾居民来往大陆通行证</option><option>其他</option></select></label>
+                <label class="field company-only plaintiff-company"><span>证照类型 <i>必填</i></span><select data-field="plaintiffLicenseType"><option value="">请选择</option><option>营业执照</option><option>统一社会信用代码证书</option><option>组织机构代码证</option><option>其他</option></select></label>
+                <label class="field"><span>身份证号 / 统一社会信用代码 <i>必填</i></span><input data-field="plaintiffId" /></label>
+                <label class="field"><span>联系电话 <i>必填</i></span><input data-field="plaintiffPhone" inputmode="tel" /></label>
+                <label class="field full"><span>住所地 / 注册地址 <i>必填</i></span><input data-field="plaintiffAddress" /></label>
+                <label class="field company-only plaintiff-company"><span>法定代表人 / 经营者</span><input data-field="plaintiffRepresentative" /></label>
+                <label class="field company-only plaintiff-company"><span>职务</span><input data-field="plaintiffRepresentativeTitle" placeholder="如：执行董事、经营者" /></label>
+                <label class="field company-only plaintiff-company"><span>负责人手机号码 <i>必填</i></span><input data-field="plaintiffRepresentativePhone" inputmode="tel" /></label>
+              </div>
+            </div>
+            <div class="party-card defendant-card">
+              <div class="section-label with-tag">被告信息 <em>后续栏目自动同步</em></div>
+              <div class="field-grid two">
+                <label class="field"><span>被告类型</span><select data-field="defendantType"><option value="个人">个人</option><option value="个体工商户">个体工商户</option><option value="公司">公司</option></select></label>
+                <label class="field"><span>姓名或名称 <i>必填</i></span><input data-field="defendantName" placeholder="尽量与身份证或营业执照一致" /></label>
+                <label class="field natural-only defendant-natural"><span>性别 <i>必填</i></span><select data-field="defendantGender"><option value="">请选择</option><option>男</option><option>女</option><option>不详</option></select></label>
+                <label class="field"><span>国别或地区 <i>必填</i></span><input data-field="defendantCountry" placeholder="如：中国" /></label>
+                <label class="field natural-only defendant-natural"><span>证件类型</span><select data-field="defendantIdType"><option value="">未知/不填</option><option>居民身份证</option><option>护照</option><option>其他</option></select></label>
+                <label class="field company-only defendant-company"><span>证照类型 <i>必填</i></span><select data-field="defendantLicenseType"><option value="">请选择</option><option>营业执照</option><option>统一社会信用代码证书</option><option>组织机构代码证</option><option>其他</option></select></label>
+                <label class="field"><span>身份证号 / 统一社会信用代码</span><input data-field="defendantId" placeholder="不知道可留空" /></label>
+                <label class="field"><span>联系电话</span><input data-field="defendantPhone" inputmode="tel" placeholder="不知道可留空" /></label>
+                <label class="field full"><span>住所地 / 注册地址 <i>必填</i></span><input data-field="defendantAddress" /></label>
+                <label class="field full"><span>实际经营或居住地址</span><input data-field="defendantActualAddress" /></label>
+                <label class="field company-only defendant-company"><span>法定代表人 / 经营者</span><input data-field="defendantRepresentative" /></label>
+                <label class="field company-only defendant-company"><span>负责人联系电话</span><input data-field="defendantRepresentativePhone" inputmode="tel" /></label>
+              </div>
+            </div>
+            <div class="section-label">交易事实与理由</div>
+            <div class="field-grid two">
+              <label class="field"><span>我有没有书面买卖合同 <i>必填</i></span><select data-field="contractForm"><option value="">请选择</option><option>书面买卖合同</option><option>无书面合同（送货单等）</option><option>微信/短信约定</option><option>订单或采购单</option><option>电商平台订单</option><option>口头约定</option><option>多种凭据组合</option></select></label>
+              <label class="field"><span>合同或首次交易日期 <i>必填</i></span><input type="date" data-field="contractDate" /></label>
+              <label class="field"><span>合同名称/编号</span><input data-field="contractName" placeholder="有书面合同才需要填写" /></label>
+              <label class="field"><span>货物名称及规格 <i>必填</i></span><input data-field="goods" /></label>
+              <div class="no-contract-panel full" id="noContractPanel">
+                <div class="no-contract-title"><strong>没有书面合同也可以继续整理</strong><span>把“谁订货、谁签收、价格怎么定、对方是否认账”写清楚</span></div>
+                <div class="field-grid two">
+                  <label class="field full"><span>交易如何达成 <i>必填</i></span><textarea rows="3" data-field="dealFormation"></textarea></label>
+                  <label class="field full"><span>送货单及签收情况 <i>必填</i></span><textarea rows="3" data-field="deliveryReceipt"></textarea></label>
+                  <label class="field full"><span>价格和结算依据 <i>必填</i></span><textarea rows="3" data-field="priceBasis"></textarea></label>
+                  <label class="field full"><span>对方承认交易或欠款的材料</span><textarea rows="3" data-field="debtAcknowledgement"></textarea></label>
+                </div>
+              </div>
+              <label class="field"><span>交货日期</span><input type="date" data-field="deliveryDate" /></label>
+              <label class="field"><span>交货地点 <i>必填</i></span><input data-field="deliveryPlace" /></label>
+              <label class="field full"><span>交付、签收和验收情况 <i>必填</i></span><textarea rows="4" data-field="deliveryDetails"></textarea></label>
+            </div>
+            <div class="section-label">货款与履行</div>
+            <div class="money-strip">
+              <label><span>货款总额</span><div><b>¥</b><input type="number" min="0" step="0.01" data-field="totalAmount" /></div></label>
+              <span class="money-op">−</span>
+              <label><span>已付款</span><div><b>¥</b><input type="number" min="0" step="0.01" data-field="paidAmount" /></div></label>
+              <span class="money-op">=</span>
+              <div class="money-result"><span>尚欠货款</span><strong id="principalDisplay">¥ 0.00</strong></div>
+            </div>
+            <div class="field-grid two">
+              <label class="field"><span>付款到期日 <i>必填</i></span><input type="date" data-field="dueDate" /></label>
+              <label class="field"><span>是否存在质量/数量/退货争议</span><select data-field="qualityDispute"><option value="no">没有</option><option value="yes">有</option><option value="unknown">不确定</option></select></label>
+              <label class="field full"><span>付款约定</span><textarea rows="3" data-field="paymentTerms"></textarea></label>
+              <label class="field full"><span>争议或对方拒付理由</span><textarea rows="3" data-field="qualityDetails"></textarea></label>
+              <label class="field full"><span>催款经过 <i>必填</i></span><textarea rows="4" data-field="demandHistory"></textarea></label>
+            </div>
+            <div class="section-label">诉讼请求</div>
+            <div class="claim-box">
+              <label class="switch-row"><input type="checkbox" data-field="claimInterest" /><span><b>同时主张逾期付款损失、利息或违约金</b><small>有约定按约定；没有约定时填写起算日期和计算方式</small></span></label>
+              <label class="field"><span>逾期付款损失、利息或违约金的计算方式</span><textarea rows="3" data-field="interestTerms"></textarea></label>
+              <label class="switch-row"><input type="checkbox" data-field="claimCosts" checked /><span><b>请求被告承担本案诉讼费用</b></span></label>
+              <label class="switch-row"><input type="checkbox" data-field="claimAttorneyFee" /><span><b>请求承担律师费等实现债权费用</b></span></label>
+              <label class="field"><span>实现债权费用及依据</span><input data-field="attorneyFeeTerms" /></label>
+            </div>
+            <div class="section-label">提交法院和管辖依据</div>
+            <div class="field-grid two">
+              <label class="field full"><span>九江辖区基层法院 <i>必填</i></span><select data-field="court"><option value="">请选择</option></select></label>
+              <label class="field written-contract-only"><span>书面合同是否约定管辖法院</span><select data-field="jurisdictionAgreement"><option value="unknown">不确定</option><option value="no">没有</option><option value="yes">有</option></select></label>
+              <label class="field"><span>你是否签过书面仲裁约定</span><select data-field="arbitration"><option value="unknown">不确定</option><option value="no">没有</option><option value="yes">有</option></select></label>
+              <label class="field full written-contract-only"><span>书面合同中的管辖约定</span><textarea rows="3" data-field="jurisdictionClause"></textarea></label>
+            </div>
+            <div class="choice-grid" id="jurisdictionChoices"></div>
+            <label class="field full"><span>管辖补充说明</span><textarea rows="3" data-field="jurisdictionNote"></textarea></label>
+          </section>
+
+          <section class="form-step" data-step-panel="1">
+            <div class="column-intro"><strong>本栏目生成：当事人身份证明</strong><span>下面的问题虽然在起诉状中出现过，但已经自动带入；在这里修改，起诉状也会同步更新。</span></div>
+            <div class="party-card synced-card">
+              <div class="section-label with-tag">原告身份信息 <em>已与起诉状同步</em></div>
+              <div class="field-grid two">
+                <label class="field"><span>主体类型</span><select data-field="plaintiffType"><option value="个人">个人</option><option value="个体工商户">个体工商户</option><option value="公司">公司</option></select></label>
+                <label class="field"><span>姓名或经营主体名称 <i>必填</i></span><input data-field="plaintiffName" /></label>
+                <label class="field natural-only plaintiff-natural"><span>性别 <i>必填</i></span><select data-field="plaintiffGender"><option value="">请选择</option><option>男</option><option>女</option></select></label>
+                <label class="field"><span>国别或地区 <i>必填</i></span><input data-field="plaintiffCountry" /></label>
+                <label class="field natural-only plaintiff-natural"><span>证件类型 <i>必填</i></span><select data-field="plaintiffIdType"><option value="">请选择</option><option>居民身份证</option><option>护照</option><option>港澳居民来往内地通行证</option><option>台湾居民来往大陆通行证</option><option>其他</option></select></label>
+                <label class="field company-only plaintiff-company"><span>证照类型 <i>必填</i></span><select data-field="plaintiffLicenseType"><option value="">请选择</option><option>营业执照</option><option>统一社会信用代码证书</option><option>组织机构代码证</option><option>其他</option></select></label>
+                <label class="field"><span>身份证号 / 统一社会信用代码 <i>必填</i></span><input data-field="plaintiffId" /></label>
+                <label class="field"><span>联系电话 <i>必填</i></span><input data-field="plaintiffPhone" inputmode="tel" /></label>
+                <label class="field full"><span>住所地 / 注册地址 <i>必填</i></span><input data-field="plaintiffAddress" /></label>
+                <label class="field company-only plaintiff-company"><span>法定代表人 / 经营者</span><input data-field="plaintiffRepresentative" /></label>
+                <label class="field company-only plaintiff-company"><span>职务</span><input data-field="plaintiffRepresentativeTitle" /></label>
+                <label class="field company-only plaintiff-company"><span>负责人手机号码 <i>必填</i></span><input data-field="plaintiffRepresentativePhone" inputmode="tel" /></label>
+              </div>
+            </div>
+            <div class="section-label evidence-heading"><span>身份证明材料目录</span><button type="button" class="button small" id="addIdentityMaterialBtn">＋ 添加材料</button></div>
+            <div class="notice-box">一行代表一种身份材料，可在该编号下上传多个文件；身份证正反面放在同一行。</div>
+            <div class="identity-material-list" id="identityMaterialList"></div>
+            <div class="section-label">委托代理材料</div>
+            <label class="field"><span>这次起诉由谁办理</span><select data-field="represented"><option value="no">我本人 / 本单位自行办理</option><option value="yes">委托代理人办理</option></select></label>
+            <div class="agent-panel hidden" id="agentPanel">
+              <div class="field-grid two">
+                <label class="field"><span>代理人姓名</span><input data-field="agentName" /></label>
+                <label class="field"><span>代理人身份</span><select data-field="agentType"><option>律师</option><option>近亲属</option><option>本单位员工</option><option>其他符合条件的代理人</option></select></label>
+                <label class="field"><span>代理人证件类型</span><select data-field="agentIdType"><option value="">请选择</option><option>居民身份证</option><option>律师执业证</option><option>其他</option></select></label>
+                <label class="field"><span>代理人证件号码</span><input data-field="agentId" /></label>
+                <label class="field"><span>联系电话</span><input data-field="agentPhone" inputmode="tel" /></label>
+                <label class="field"><span>单位</span><input data-field="agentOrganization" /></label>
+                <label class="field"><span>执业证号（律师填写）</span><input data-field="agentLicenseNo" /></label>
+              </div>
+              <label class="upload-zone compact" for="agentFiles"><b>上传授权委托和代理身份证明</b><span>只有选择“委托代理人”时才会列入材料</span><input id="agentFiles" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,.png" /></label>
+              <div class="uploaded-files" id="agentFileList"></div>
+            </div>
+          </section>
+
+          <section class="form-step" data-step-panel="2">
+            <div class="column-intro"><strong>本栏目生成：被告线索辅助表</strong><span>这里集中核对被告名称、证件、地址和送达线索；与起诉状重复的内容已经自动带入。</span></div>
+            <div class="party-card synced-card">
+              <div class="section-label with-tag">被告主体和地址线索 <em>已与起诉状同步</em></div>
+              <div class="field-grid two">
+                <label class="field"><span>被告类型</span><select data-field="defendantType"><option value="个人">个人</option><option value="个体工商户">个体工商户</option><option value="公司">公司</option></select></label>
+                <label class="field"><span>姓名或名称 <i>必填</i></span><input data-field="defendantName" /></label>
+                <label class="field natural-only defendant-natural"><span>性别 <i>必填</i></span><select data-field="defendantGender"><option value="">请选择</option><option>男</option><option>女</option><option>不详</option></select></label>
+                <label class="field"><span>国别或地区 <i>必填</i></span><input data-field="defendantCountry" /></label>
+                <label class="field natural-only defendant-natural"><span>证件类型</span><select data-field="defendantIdType"><option value="">未知/不填</option><option>居民身份证</option><option>护照</option><option>其他</option></select></label>
+                <label class="field company-only defendant-company"><span>证照类型 <i>必填</i></span><select data-field="defendantLicenseType"><option value="">请选择</option><option>营业执照</option><option>统一社会信用代码证书</option><option>组织机构代码证</option><option>其他</option></select></label>
+                <label class="field"><span>身份证号 / 统一社会信用代码</span><input data-field="defendantId" /></label>
+                <label class="field"><span>联系电话</span><input data-field="defendantPhone" inputmode="tel" /></label>
+                <label class="field full"><span>住所地 / 注册地址 <i>必填</i></span><input data-field="defendantAddress" /></label>
+                <label class="field full"><span>实际经营或居住地址</span><input data-field="defendantActualAddress" /></label>
+                <label class="field company-only defendant-company"><span>法定代表人 / 经营者</span><input data-field="defendantRepresentative" /></label>
+                <label class="field company-only defendant-company"><span>负责人联系电话</span><input data-field="defendantRepresentativePhone" inputmode="tel" /></label>
+                <label class="field full"><span>这些信息从哪里找到的</span><input data-field="defendantInfoSource" placeholder="送货单、付款记录、企业信用公示等" /></label>
+              </div>
+            </div>
+            <div class="section-label upload-heading">上传被告信息来源（辅助）</div>
+            <label class="upload-zone compact" for="defendantFiles"><b>上传工商信息、身份证明或地址线索</b><span>用于说明名称、证件号码和送达地址来源</span><input id="defendantFiles" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,.png" /></label>
+            <div class="uploaded-files" id="defendantFileList"></div>
+          </section>
+
+          <section class="form-step" data-step-panel="3">
+            <div class="column-intro"><strong>本栏目生成：证据目录及证据材料</strong><span>原告、被告和案由会自动带入；这里只整理每份证据是什么、从哪里来、证明什么。</span></div>
+            <div class="synced-inline-grid">
+              <label class="field"><span>原告名称 <em>同步</em></span><input data-field="plaintiffName" /></label>
+              <label class="field"><span>被告名称 <em>同步</em></span><input data-field="defendantName" /></label>
+              <label class="field"><span>案由</span><input value="买卖合同纠纷" readonly /></label>
+            </div>
+            <div class="section-label evidence-heading"><span>证据目录</span><button type="button" class="button small" id="addEvidenceBtn">＋ 添加证据</button></div>
+            <div class="notice-box">一行代表一个证据编号。图文证据可在该编号下上传多个文件；录音、视频只登记到目录，请在法院平台另行上传。</div>
+            <div id="evidenceList" class="evidence-list"></div>
+          </section>
+
+          <section class="form-step" data-step-panel="4">
+            <div class="column-intro"><strong>本栏目生成：送达地址确认书和收款账户确认书</strong><span>主体名称、证件号码、地址和电话会从前面自动带入；你仍可在这里核对和修改。</span></div>
+            <div class="synced-inline-grid">
+              <label class="field"><span>提交法院 <em>同步</em></span><select data-field="court"><option value="">请选择</option></select></label>
+              <label class="field"><span>原告名称 <em>同步</em></span><input data-field="plaintiffName" /></label>
+              <label class="field"><span>身份证号 / 统一社会信用代码 <em>同步</em></span><input data-field="plaintiffId" /></label>
+            </div>
+            <div class="section-label">送达确认</div>
+            <div class="notice-box">这里填写法院向我送达材料的地址，不是对方地址。请填写能够长期、稳定收件的信息。</div>
+            <div class="field-grid two">
+              <label class="field"><span>受送达人 <i>必填</i></span><input data-field="serviceRecipient" /></label>
+              <label class="field"><span>指定签收人</span><input data-field="serviceSigner" /></label>
+              <label class="field full"><span>确认送达地址 <i>必填</i></span><input data-field="serviceAddress" /></label>
+              <label class="field"><span>邮政编码</span><input data-field="servicePostcode" inputmode="numeric" /></label>
+              <label class="field"><span>手机号码 <i>必填</i></span><input data-field="servicePhone" inputmode="tel" /></label>
+              <label class="field"><span>电子邮箱</span><input data-field="serviceEmail" type="email" /></label>
+              <label class="field"><span>是否同意电子送达</span><select data-field="electronicService"><option value="yes">同意</option><option value="no">不同意</option><option value="unsure">暂不确定</option></select></label>
+            </div>
+            <div class="notice-box legal-effect-note">在线提交和电子签名与线下具有同等法律效力。请确认地址、手机和邮箱长期有效；材料审核通过后仍需妥善保存原件。</div>
+            <div class="section-label">收款账户确认书 <em>法院平台选传</em></div>
+            <label class="switch-row"><input type="checkbox" data-field="includeRefundAccount" /><span><b>一并生成收款/退费账户确认书</b><small>用于法院退费或向你支付相关款项，不勾选不影响必传完成度</small></span></label>
+            <div class="agent-panel hidden" id="refundAccountPanel">
+              <div class="field-grid two">
+                <label class="field"><span>账户名称</span><input data-field="refundAccountName" /></label>
+                <label class="field"><span>开户银行</span><input data-field="refundBankName" /></label>
+                <label class="field full"><span>银行账号</span><input data-field="refundBankAccount" inputmode="numeric" /></label>
+                <label class="field"><span>联系电话</span><input data-field="refundPhone" inputmode="tel" /></label>
+              </div>
+            </div>
+          </section>
+
+          <section class="form-step" data-step-panel="5">
+            <div class="review-simple">
+              <div id="reviewStatus" class="review-status"></div>
+              <div id="issueList" class="issue-list"></div>
+            </div>
+            <div class="ai-review-card">
+              <div class="ai-review-head">
+                <div><h3>AI检查</h3><p>检查事实、金额、主体、管辖和证据之间有没有矛盾或遗漏。</p></div>
+                <button type="button" class="button" id="aiReviewBtn">用 AI 检查</button>
+              </div>
+              <p class="ai-privacy">点击后，会把你填写的文字（可能包含姓名、号码和地址）及材料清单发送给 DeepSeek；不会发送身份证图片、证据图片、PDF、录音或视频原文件。</p>
+              <div id="aiReviewStatus" class="ai-review-status" aria-live="polite"></div>
+              <div id="aiReviewResult" class="ai-review-result"></div>
+            </div>
+            <div class="package-card">
+              <div><span class="package-icon">ZIP</span></div>
+              <div><h3>下载资料包</h3><p>确认问题已处理后再下载。</p></div>
+              <button type="button" class="button primary large" id="downloadPackageBtn">下载资料包</button>
+            </div>
+          </section>
+        </form>
+
+        <div class="form-footer">
+          <button type="button" class="button ghost" id="prevBtn" disabled>上一步</button>
+          <span id="saveStatus">已自动保存</span>
+          <button type="button" class="button primary" id="nextBtn">下一步</button>
+        </div>
+      </section>
+
+      <aside class="preview-panel">
+        <div class="preview-head">
+          <div><span>PDF 实时预览 · 与下载内容一致</span><strong id="previewTitle">民事起诉状</strong></div>
+          <div class="preview-actions"><button type="button" id="printBtn" title="打印当前材料">打印</button><button type="button" id="downloadCurrentBtn" title="下载当前材料">下载</button></div>
+        </div>
+        <div class="document-tabs" id="documentTabs">
+          <button class="active" data-doc="complaint">起诉状</button>
+          <button data-doc="plaintiff">当事人身份证明</button>
+          <button data-doc="defendant">被告线索（辅助）</button>
+          <button data-doc="evidence">证据目录</button>
+          <button data-doc="service">送达确认</button>
+          <button data-doc="refund">收款账户</button>
+        </div>
+        <div class="template-source" id="templateSource" aria-live="polite"></div>
+        <div class="paper-wrap"><article class="paper" id="documentPreview"></article></div>
+        <div class="disclaimer">仅用于整理诉讼材料草稿，不代替律师意见或法院审查。实际提交前请核对目标法院要求。</div>
+      </aside>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <dialog class="evidence-type-dialog" id="evidenceTypeDialog">
+      <form method="dialog">
+        <div class="dialog-head"><h3>添加哪一种证据？</h3><button type="submit" value="cancel" aria-label="关闭">×</button></div>
+        <p>图文证据可以上传多个文件；影音证据只登记目录信息。</p>
+        <div class="evidence-type-actions">
+          <button type="submit" value="document" class="evidence-type-choice"><b>图文证据</b><span>图片、PDF、Word、表格或TXT</span></button>
+          <button type="submit" value="media" class="evidence-type-choice"><b>影音证据</b><span>录音或视频，文件另行上传</span></button>
+        </div>
+      </form>
+    </dialog>
+    <script src="./vendor/html2pdf.bundle.min.js"></script>
+    <script src="./vendor/pdf-lib.min.js"></script>
+    <script src="./vendor/mammoth.browser.min.js"></script>
+    <script src="./vendor/xlsx.full.min.js"></script>
+    <!-- 文书契约：必须先于 app.js 加载 -->
+    <script src="./contracts/jiujiang.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

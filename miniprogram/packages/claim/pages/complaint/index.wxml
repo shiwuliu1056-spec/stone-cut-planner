@@ -1,0 +1,2 @@
+<home-nav id="claim-home-nav" title="起诉状"/>
+<claim-form id="form" from-review="{{fromReview}}" checks="{{checks}}" check-index="{{checkIndex}}" check-total="{{checkTotal}}" check-kind="{{checkKind}}" check-label="{{checkLabel}}" can-optimize="{{canOptimize}}" optimization-issue="{{optimizationIssue}}" step="{{0}}"/>

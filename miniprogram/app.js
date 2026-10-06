@@ -1,36 +1,34 @@
-// 文件用途：配置小程序全局参数，开发者工具走本机后端，真机和正式版走 CloudBase。
-const { ensureCloudReady } = require("./services/api");
+// 文件用途：配置小程序全局参数并预热后端。
+// 已完全脱离云开发：不再使用 wx.cloud（既不用 callContainer，也不用云存储），
+// 所有请求都走自建后端的 HTTPS 域名。
+const { ensureBackendReady } = require("./services/api");
 
 App({
   globalData: {
-    cloudEnvId: "cloud1-d7gxlhtv344e94d8e",
-    cloudServiceName: "stone-cut-planner-api",
+    // 自建后端根地址。必须是 HTTPS，且在小程序后台登记为 request 合法域名，
+    // 否则 wx.request 会被平台拦下。
+    apiBaseUrl: "https://cacci.cn/bstools",
+    // 开发者工具直连本机后端。该地址在手机上指向手机自身，真机不可用，
+    // 所以只按运行平台判断，绝不让真机走到这个分支（见 isDevtools 注释）。
     localBackendInDevtools: true,
-    // 真机使用云托管；开发者工具在 onLaunch 中自动切换到本地后端。
-    useCloudContainer: true,
-    // 开发者工具本机预览地址；真机/上线前替换为 HTTPS 合法域名。
-    apiBaseUrl: "http://127.0.0.1:3100",
-    publicApiBaseUrl:
-      "https://stone-cut-planner-api-305487-11-1477936117.sh.run.tcloudbase.com",
+    localApiBaseUrl: "http://127.0.0.1:3100",
+    // 运行期数据：拍照识别草稿与最近一次排版结果，由页面写入、跨页读取。
+    ocrDraft: null,
+    latestResult: null,
   },
 
   onLaunch() {
-    if (this.globalData.localBackendInDevtools && this.isDevtools()) {
-      this.globalData.useCloudContainer = false;
-      this.globalData.publicApiBaseUrl = this.globalData.apiBaseUrl;
-    }
-    if (
-      this.globalData.useCloudContainer &&
-      this.globalData.cloudEnvId &&
-      wx.cloud
-    ) {
-      wx.cloud.init({ env: this.globalData.cloudEnvId, traceUser: true });
-    }
-    this.warmUpCloud();
+    this.applyRuntimeConfig();
+    this.warmUpBackend();
+  },
+
+  onShow() {
+    this.warmUpBackend();
   },
 
   // 只按运行平台判断是否处于开发者工具：模拟器为 devtools，真机为 ios/android。
-  // 不能用 envVersion——真机调试与预览同样返回 develop，会把真机误判成模拟器。
+  // 不能用 envVersion——真机调试与预览同样返回 develop，会把真机误判成模拟器，
+  // 从而拿到 http://127.0.0.1:3100（在手机上指向手机自身）而必然请求失败。
   isDevtools() {
     try {
       if (
@@ -48,17 +46,19 @@ App({
       )
         return true;
     } catch {
-      /* 兜底：按真机处理，走云托管 */
+      /* 兜底：按真机处理 */
     }
     return false;
   },
 
-  onShow() {
-    this.warmUpCloud();
+  applyRuntimeConfig() {
+    if (this.globalData.localBackendInDevtools && this.isDevtools()) {
+      this.globalData.apiBaseUrl = this.globalData.localApiBaseUrl;
+    }
   },
 
-  warmUpCloud() {
-    // 每次启动/回前台都拉起云托管容器；纯后台预热，失败静默，真实请求不依赖它。
-    ensureCloudReady().catch(() => {});
+  // 纯后台预热：每次启动/回前台各触发一次，失败静默，真实请求不依赖它。
+  warmUpBackend() {
+    ensureBackendReady().catch(() => {});
   },
 });

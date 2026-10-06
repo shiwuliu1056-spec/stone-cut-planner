@@ -1,9 +1,12 @@
-<!-- 文件用途：单页同时承载「石材下料」与「视频去水印」两个工具。
-     底部切换用 hidden 显隐而不是 wx.switchTab：不换 webview 就不会出现 iOS 上的整屏白帧，
-     同时两个工具的 DOM 常驻，切换时表单状态不丢、也不需要重新渲染。 -->
+<!-- 三个工具总览同页显隐；起诉助手组件常驻，避免入口重复创建页面。 -->
+<toolbox-home id="toolbox-home" wx:if="{{tool === 'home'}}" bind:toolselect="openTool" />
+<view class="claim-page" hidden="{{tool !== 'claim'}}">
+  <claim-home id="claim-home" active="{{tool === 'claim'}}" bind:back="backToToolbox" />
+</view>
 
 <!-- ==================== 工具一：石材下料 ==================== -->
 <view class="page-shell index-page" hidden="{{tool !== 'cut'}}">
+  <view class="tool-home-link" bindtap="backToToolbox" hover-class="tap-dim" hover-start-time="0" role="button">返回工具箱</view>
   <view class="hero-card">
     <view>
       <view class="eyebrow">STONE CUT PLANNER</view>
@@ -45,7 +48,7 @@
         </view>
       </view>
     </block>
-    <view class="add-row" bindtap="addSlab"><text class="ui-icon add-icon">＋</text> 添加大板</view>
+    <view class="add-row" hover-class="tap-dim" hover-start-time="0" bindtap="addSlab"><text class="ui-icon add-icon">＋</text> 添加大板</view>
   </view>
 
   <view class="section-card">
@@ -60,7 +63,7 @@
         </view>
       </view>
     </block>
-    <view class="add-row" bindtap="addPart"><text class="ui-icon add-icon">＋</text> 添加小料</view>
+    <view class="add-row" hover-class="tap-dim" hover-start-time="0" bindtap="addPart"><text class="ui-icon add-icon">＋</text> 添加小料</view>
     <view class="import-actions">
       <button class="secondary-action" bindtap="choosePhoto" loading="{{ocrBusy}}" disabled="{{busy}}"><text class="ui-icon camera-icon">▣</text> 拍照识别</button>
       <button class="secondary-action" bindtap="chooseExcel" loading="{{importing}}" disabled="{{busy}}"><text class="ui-icon file-icon">▧</text> 导入表格</button>
@@ -92,6 +95,7 @@
 
 <!-- ==================== 工具二：视频去水印 ==================== -->
 <view class="page-shell watermark-page" hidden="{{tool !== 'watermark'}}">
+  <view class="tool-home-link" bindtap="backToToolbox" hover-class="tap-dim" hover-start-time="0" role="button">返回工具箱</view>
   <view class="hero-card">
     <view>
       <view class="eyebrow">VIDEO WATERMARK REMOVER</view>
@@ -164,18 +168,4 @@
       </view>
     </view>
   </view>
-</view>
-
-<!-- ==================== 底部工具切换栏（页面内，不换 webview）==================== -->
-<view class="tab-bar">
-  <view
-    class="tab-item {{tool === 'cut' ? 'active' : ''}}"
-    data-tool="cut"
-    bindtap="switchTool"
-  >下料工具</view>
-  <view
-    class="tab-item {{tool === 'watermark' ? 'active' : ''}}"
-    data-tool="watermark"
-    bindtap="switchTool"
-  >视频去水印</view>
 </view>

@@ -1,0 +1,19 @@
+<view class="shell">
+  <view class="card">
+    <view class="label">模板名称</view><input class="control" value="{{label}}" placeholder="例如：我的公司" maxlength="100" bindinput="labelInput"/>
+    <view wx:for="{{fields}}" wx:key="key" class="field">
+      <view class="row"><text class="label">{{item.label}}</text><text wx:if="{{item.required}}" class="required">必填</text></view>
+      <picker wx:if="{{item.kind === 'select'}}" range="{{item.options}}" value="{{item.choice}}" data-key="{{item.key}}" bindchange="select"><view class="control row"><text>{{item.display}}</text><text class="muted">选择 ›</text></view></picker>
+      <input wx:else class="control" value="{{item.value}}" type="{{item.inputType}}" placeholder="{{item.placeholder || '请填写'}}" maxlength="500" data-key="{{item.key}}" bindinput="input"/>
+    </view>
+  </view>
+  <view class="row groups-heading"><text class="label">{{materialTitle}}</text><button size="mini" class="secondary" bindtap="addGroup">＋ 添加材料</button></view>
+  <view wx:for="{{groups}}" wx:key="id" class="card">
+    <view class="row"><text class="number">{{item.number}}</text><text class="muted">{{item.files.length}} 个文件</text><text wx:if="{{groups.length > 1}}" class="delete" data-id="{{item.id}}" bindtap="removeGroup">删除</text></view>
+    <input class="control" value="{{item.name}}" maxlength="100" data-id="{{item.id}}" bindinput="groupName"/>
+    <button class="upload" data-id="{{item.id}}" bindtap="chooseFiles">＋ 选择本组文件</button>
+    <view wx:for="{{item.files}}" wx:for-item="file" wx:key="id" class="file-row"><text class="filename">{{file.name}}</text><text class="delete" data-id="{{file.id}}" bindtap="removeFile">移除</text></view>
+  </view>
+  <view class="muted">模板只保存{{roleTitle}}信息及对应材料，交易和证据按每个案件填写。</view>
+</view>
+<view class="footer"><button class="primary" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存{{roleTitle}}模板</button></view>
