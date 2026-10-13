@@ -1,6 +1,6 @@
 # 宝松工具箱
 
-宝松工具箱是一套以**微信小程序**为主入口的工具集合：首页展示工具入口，不再通过底部栏切换工具。原有业务后端和起诉助手后端保持独立。
+宝松工具箱是一套以**微信小程序**为主入口的工具集合：首页展示工具入口，不再通过底部栏切换工具。三个工具共用一个Node进程、一个HTTP端口和一套微信身份校验。
 
 小程序包含三个功能模块：
 
@@ -23,7 +23,7 @@ miniprogram/             小程序源码（重心）
   services/api.js        后端 HTTP 调用封装、文件读取、预热与重试
   utils/                 排版图渲染、草稿存储、错误处理
 backend/                 下料与视频后端
-  server.js              HTTP 服务唯一入口，直接运行即启动
+  server.js              下料与视频HTTP处理模块
   src/solver.js          排版算法
   src/workbook.js        Excel/Word 导入导出
   src/gemini-ocr.js      拍照识别手写/打印尺寸
@@ -32,8 +32,8 @@ backend/                 下料与视频后端
   src/wechat-decrypt.js  视频号加密视频解密
   src/private-address.js SSRF 防护：私网地址判定
   tests/                 后端测试
-claim-backend/           起诉助手独立服务（本机3101），含Word引擎与已有测试
-scripts/dev.mjs          一次启动两个本地服务
+claim-backend/           起诉助手模块，含Word引擎与已有测试
+scripts/server.mjs       工具箱唯一部署入口
 shared/API.md            前后端接口契约
 Dockerfile               容器镜像（任意容器平台）
 ```
@@ -60,30 +60,27 @@ npm install
 1. 用微信开发者工具**打开仓库根目录**（工程入口是根目录的 `project.config.json`，`miniprogramRoot` 已指向 `miniprogram/`，不需要单独打开 `miniprogram/`）。
 2. 当前工程已配置 AppID `wxe4560e02e4b75800`。
 3. 小程序使用微信原生组件，不需要安装依赖或执行「构建 npm」。
-4. 执行 `npm run dev` 启动两个后端；原有工具使用 `http://127.0.0.1:3100`，起诉助手使用 `http://127.0.0.1:3101`。
-5. 真机不用改配置：`app.js` 按运行平台自动切换——开发者工具走 `localApiBaseUrl`，真机走线上 `apiBaseUrl`。
+4. 执行 `npm run dev` 启动工具箱服务；三个工具均使用 `http://127.0.0.1:3100`。
+5. 默认开发者工具和真机都走 `https://cacci.cn/bstools`，避免误连旧的本机服务。要本地开发时，将 `app.js` 的 `localBackendInDevtools` 改为 `true` 并运行 `npm run dev`；起诉助手的auto模式继承同一开关，手机仍走云端。
 
-> **为什么三个工具入口共用一个页面？**
-> 两个工具原本是两个 `tabBar` 页面，用 `wx.switchTab` 切换。iOS 真机上每次切换时
-> webview 会重新上屏，中间有 1 帧（~17ms）露出 WKWebView 的纯白画布——实测确认
-> 整块内容区连同 `position: fixed` 的底栏会一起变白，页面内任何 CSS 都拦不住。
-> 现在首页与三个工具总览在同页切换显隐，减少webview切换，也保留输入和解析状态。
-> 导航栏标题改由 `wx.setNavigationBarTitle` 跟随切换（原本由各页 json 提供）。
-> 起诉助手总览常驻主页面，资料未变化时复用填写进度；从填写页返回或回前台时会刷新。
-> 只有具体填写、检查和下载会加载分包。其内“首页”返回主页面的案件总览，“返回工具箱”回到工具目录，不清空草稿或模板。旧分包总览链接兼容跳转至 `pages/index/index?tool=claim`。
+> **工具导航与状态保留**
+> 目录和三个工具复用主包页面代码，通过 `navigateTo` 打开新的页面实例；页面栈是“目录 → 工具 → 资料子页”。iPhone 边缘右滑由微信原生导航处理，不拦截触摸，也不使用弹出容器。
+> 顶部折返箭头固定显示；工具正文只创建当前工具的 DOM。工具入口不请求后台、不等待网络、不加载起诉分包；起诉总览代码在目录中预备。
+> 石材草稿与案件资料沿用原来的本地保存，视频输入及已完成结果在内存中保留，忙碌和进度状态不跨页面恢复。
+> 仅具体填写、检查和下载加载分包。其内“首页”返回已有起诉总览，不误选底层目录。直接启动 `pages/index/index?tool=claim` 等旧链接时，也先建立底层目录，再进入工具。
 
 ### 后端部署
 
-后端是标准 Node HTTP 服务，**不依赖任何云厂商 SDK**，同一份 `Dockerfile` 可部署到任意容器平台：
+完整工具箱以 `scripts/server.mjs` 为唯一入口。自建服务器使用Node.js 22、FFmpeg、Chromium和LibreOffice Writer，由systemd常驻运行，Nginx仅代理 `/bstools/api/` 到本机3200端口。
 
-1. 用仓库根目录的 `Dockerfile` 构建镜像。容器监听 `80`（`HOST=0.0.0.0 PORT=80` 已写在镜像里）。
-2. 注入下节列出的环境变量，**不要把密钥写进代码或提交到仓库**。
-3. 把小程序的 `apiBaseUrl` 指向该服务的 HTTPS 域名。
+生产环境设置 `NODE_ENV=production`、`ALLOW_DEV_AUTH=0`、`HOST=127.0.0.1`、`PORT=3200`，把密钥放在服务器权限600的环境文件中，不提交到Git。小程序地址为 `https://cacci.cn/bstools`。
+
+根目录旧Dockerfile仅承载原有下料与视频服务，不能用于部署完整的三个工具。
 
 > **域名是硬门槛**：`wx.request` 只能请求「已备案 + 已在小程序后台登记为 request 合法域名」的 HTTPS 域名。
 > 备案与白名单没配好之前，真机一律请求失败。
 >
-> **冷启动**：让容器保持至少 1 个常驻副本，进程常驻即永远「热」，比按需拉起稳得多。
+> **冷启动**：服务器服务常驻运行可避免按需拉起，但首次启动、进程重启和外部API延迟仍需要单独处理。
 
 ## 后端
 
@@ -93,9 +90,9 @@ npm install
 npm run dev
 ```
 
-需要单独运行时用 `npm run dev:tools` 或 `npm run dev:claim`。已有服务占用端口时不要重复启动。两个服务分别读取根目录 `.env.local` 和 `claim-backend/.env`，未自动复制旧项目中的密钥。
+开发入口读取根目录 `.env.local` 和可选的 `claim-backend/.env`。`dev:tools`、`dev:claim`仅保留供模块诊断，不用于生产部署；已有服务占用端口时不要重复启动。
 
-原有工具默认监听 `http://127.0.0.1:3100`，可用 `PORT` 和 `HOST` 环境变量覆盖（不改变起诉助手端口）：
+完整工具箱默认监听 `http://127.0.0.1:3100`，可用 `PORT` 和 `HOST` 覆盖：
 
 ```bash
 PORT=8080 npm run dev
@@ -107,9 +104,7 @@ PORT=8080 npm run dev
 npm start
 ```
 
-容器内使用 `HOST=0.0.0.0 PORT=80`。
-
-起诉助手使用独立的 `npm run start:claim`；生产环境配置、微信身份校验和反向代理见 `claim-backend/README.md`。根目录 Dockerfile仍仅构建原有后端，没有自动发布起诉服务。
+生产运行由systemd注入环境变量并执行 `scripts/server.mjs`，仅本机监听，由Nginx提供HTTPS。健康检查、微信会话端点和签名视频下载可公开，业务接口需要Bearer会话；公网不接受客户端伪造的云托管身份头。
 
 ### 环境变量
 

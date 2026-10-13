@@ -1,11 +1,13 @@
 const config = require('./config');
 const draft = require('./draft');
-let session, sessionPromise;
+const session = require('../../../services/session');
 function isDevtools() { try { return wx.getDeviceInfo().platform === 'devtools'; } catch (_) { return false; } }
 function info() {
   const mode = config.defaultMode;
   const devtools = isDevtools();
-  const actualMode = mode === 'auto' ? (devtools ? 'local' : 'cloud') : mode;
+  let localDevelopment = false;
+  try { localDevelopment = Boolean(getApp().globalData.localBackendInDevtools); } catch (_) {}
+  const actualMode = mode === 'auto' ? (devtools && localDevelopment ? 'local' : 'cloud') : mode;
   const localBase = config.localBaseUrl;
   const cloudBase = config.cloudBaseUrl;
   return { mode, actualMode, localBase, cloudBase, devtools, base: actualMode === 'local' ? (devtools ? localBase : '') : cloudBase };
@@ -18,21 +20,14 @@ function request(path, method, data, token) {
   });
 }
 async function ensureSession() {
-  if (!base()) throw new Error('本地模式仅支持微信开发者工具；手机请切换云端模式');
-  if (session && session.base === base() && session.expiresAt > Date.now() + 10000) return session.token;
-  if (!sessionPromise) sessionPromise = (async () => {
-    let data; const currentBase = base();
-    if (info().devtools && info().actualMode === 'local') { let devId = wx.getStorageSync('claim-dev-id'); if (!devId) { devId = draft.id(); wx.setStorageSync('claim-dev-id', devId); } data = { devId }; }
-    else { const login = await new Promise((resolve, reject) => wx.login({ success: resolve, fail: reject })); data = { code: login.code }; }
-    session = await request('/session', 'POST', data); session.base = currentBase; return session.token;
-  })().finally(() => { sessionPromise = null; });
-  return sessionPromise;
+  if (!base()) throw new Error('本地模式仅支持微信开发者工具；手机请使用线上服务');
+  return session.token(base());
 }
 async function call(path, method, data) {
   try { return await request(path, method, data, await ensureSession()); }
   catch (error) {
     if(error.status===503&&error.message==='服务正在启动，请稍后再试'){await new Promise(resolve=>setTimeout(resolve,1000));return request(path,method,data,await ensureSession());}
-    if (error.status !== 401) throw error; session = null; return request(path, method, data, await ensureSession());
+    if (error.status !== 401) throw error; session.invalidate(base()); return request(path, method, data, await ensureSession());
   }
 }
 async function upload(taskId, file) {

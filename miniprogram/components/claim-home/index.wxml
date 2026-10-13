@@ -1,5 +1,4 @@
 <view class="home-shell">
-  <view class="toolbox-return" bindtap="backToToolbox" hover-class="return-pressed" hover-start-time="0" role="button">返回工具箱</view>
   <view class="hero-card">
     <view class="hero-content">
       <view class="eyebrow">九江·民事一审·买卖合同纠纷</view>

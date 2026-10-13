@@ -1,0 +1,26 @@
+[Unit]
+Description=Baosong Toolbox unified service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bstools
+Group=bstools
+WorkingDirectory=/opt/bstools/current
+EnvironmentFile=/opt/bstools/shared/toolbox.env
+Environment=PATH=/opt/bstools/runtime/node22/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/bstools/runtime/node22/bin/node scripts/server.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=180
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/bstools /var/log/bstools
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -6,10 +6,10 @@
   "license": "MIT",
   "scripts": {
     "postinstall": "npm --prefix backend install && npm --prefix claim-backend install",
-    "dev": "node scripts/dev.mjs",
+    "dev": "node --env-file-if-exists=.env.local --env-file-if-exists=claim-backend/.env scripts/server.mjs",
     "dev:tools": "node --env-file-if-exists=.env.local backend/server.js",
     "dev:claim": "node --env-file-if-exists=claim-backend/.env claim-backend/server.mjs",
-    "start": "node backend/server.js",
+    "start": "node scripts/server.mjs",
     "start:claim": "node claim-backend/server.mjs",
     "test": "node --test backend/tests/*.test.js && npm --prefix claim-backend test",
     "test:claim": "npm --prefix claim-backend test"

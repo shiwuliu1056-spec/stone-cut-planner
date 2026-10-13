@@ -1,5 +1,8 @@
 // 案件总览的交互留在主包；具体填写、检查和下载仍按需打开分包。
 const draft = require('./draft');
+function navigate(url) {
+  wx.navigateTo({url});
+}
 
 module.exports = {
   data: {
@@ -19,11 +22,11 @@ module.exports = {
     },
     open(event) {
       const step = Number(event.currentTarget.dataset.step);
-      if (Number.isInteger(step) && step >= 0 && step < 5) wx.navigateTo({ url: draft.pagePath(step) });
+      if (Number.isInteger(step) && step >= 0 && step < 5) navigate(draft.pagePath(step));
     },
-    continueCase() { wx.navigateTo({ url: draft.pagePath(0) }); },
-    review() { wx.navigateTo({ url: draft.pagePath(5) }); },
-    manage() { wx.navigateTo({ url: '/packages/claim/pages/settings/index' }); },
+    continueCase() { navigate(draft.pagePath(0)); },
+    review() { navigate(draft.pagePath(5)); },
+    manage() { navigate('/packages/claim/pages/settings/index'); },
     useSample() { this.caseAction('sample'); },
     clearCase() { this.caseAction('clear'); },
     caseAction(type) {

@@ -57,7 +57,7 @@ async function receiveFile(req, target, expectedSize) {
   });
 }
 
-export async function createClaimServer({ host = '127.0.0.1', port = 3101, devAuth = process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_AUTH !== '0' && ['127.0.0.1','::1','localhost'].includes(host) } = {}) {
+export async function createClaimServer({ host = '127.0.0.1', port = 3101, httpServer = null, devAuth = process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_AUTH !== '0' && ['127.0.0.1','::1','localhost'].includes(host) } = {}) {
   if (devAuth && (process.env.NODE_ENV === 'production' || !['127.0.0.1','::1','localhost'].includes(host))) throw new Error('开发身份仅限本机非生产环境');
   const sessions = new Map(), tasks = new Map(), throttle = new Map();
   const secret = randomBytes(24).toString('hex');
@@ -73,7 +73,7 @@ export async function createClaimServer({ host = '127.0.0.1', port = 3101, devAu
   };
   const taskFor = (id, session) => { const task = tasks.get(id); if (!task || task.owner !== session.owner || task.expiresAt < Date.now()) fail(404, '任务不存在或已过期，请重新生成'); return task; };
   const publicTask = task => ({ id: task.id, formatVersion:FORMAT_VERSION,status: task.status, progress: task.progress, error: task.error || '', uploadedIds: task.files.filter(f => f.uploaded).map(f => f.id), expiresAt: task.expiresAt, outputs: task.outputs || [] });
-  const server = createServer(async (req, res) => {
+  const handler = async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost'); const path = url.pathname;
       if (req.method === 'GET' && path === '/api/claim/health') return json(res, 200, { ok: !!(renderer && renderer.ready), service: 'claim' });
@@ -87,7 +87,7 @@ export async function createClaimServer({ host = '127.0.0.1', port = 3101, devAu
       }
       if (req.method === 'POST' && path === '/api/claim/session') {
         const input = await body(req); let owner;
-        const ip = req.socket.remoteAddress; const count = throttle.get(ip) || { n: 0, until: Date.now() + 60000 };
+        const ip = req.toolboxClientIp || req.socket.remoteAddress; const count = throttle.get(ip) || { n: 0, until: Date.now() + 60000 };
         if (count.until < Date.now()) { count.n = 0; count.until = Date.now() + 60000; } if (++count.n > 30) fail(429, '请求过于频繁'); throttle.set(ip, count);
         if (devAuth && input.devId && idPattern.test(input.devId)) owner = 'dev-' + input.devId;
         else {
@@ -160,18 +160,19 @@ export async function createClaimServer({ host = '127.0.0.1', port = 3101, devAu
       }
       fail(404, '接口不存在');
     } catch (error) { if (!res.headersSent) json(res, error.status || 500, { error: error.status ? error.message : '服务发生错误，请重试' }); else res.end(); }
-  });
-  await new Promise(resolveListen => server.listen(port, host, resolveListen));
+  };
+  const server = httpServer || createServer(handler);
+  if (!httpServer) await new Promise((resolveListen, reject) => { server.once('error', reject); server.listen(port, host, resolveListen); });
   const actualPort = server.address().port;
   renderer = new ClaimRenderer(join(root, 'engine'), `http://127.0.0.1:${actualPort}`, secret);
-  try { await renderer.start(); } catch (error) { server.close(); await rm(workRoot, { recursive: true, force: true }); throw error; }
+  try { await renderer.start(); } catch (error) { if (!httpServer) server.close(); await rm(workRoot, { recursive: true, force: true }); throw error; }
   const timer = setInterval(async () => {
     for (const [id, task] of tasks) if (task.expiresAt < Date.now() && !['queued','generating'].includes(task.status)) { tasks.delete(id); await rm(task.dir, { recursive: true, force: true }); }
     for (const [token, session] of sessions) if (session.expiresAt < Date.now()) sessions.delete(token);
     for (const [ip, entry] of throttle) if (entry.until < Date.now()) throttle.delete(ip);
     await cleanupOldProcesses().catch(error=>console.error('Claim workspace cleanup failed:',error.code||error.name));
   }, 30000); timer.unref();
-  return { server, renderer, tasks, origin: `http://127.0.0.1:${actualPort}`, async close() { closing = true; clearInterval(timer); await queue; await renderer.close(); await new Promise(r => server.close(r)); await rm(workRoot, { recursive: true, force: true }); } };
+  return { server, renderer, tasks, handle: handler, authenticate, origin: `http://127.0.0.1:${actualPort}`, async close() { closing = true; clearInterval(timer); await queue; await renderer.close(); if (!httpServer) await new Promise(r => server.close(r)); await rm(workRoot, { recursive: true, force: true }); } };
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const app = await createClaimServer({ host: process.env.HOST || '127.0.0.1', port: Number(process.env.PORT || 3101) });

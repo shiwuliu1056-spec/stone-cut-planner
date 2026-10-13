@@ -10,7 +10,7 @@ App({
     apiBaseUrl: "https://cacci.cn/bstools",
     // 开发者工具直连本机后端。该地址在手机上指向手机自身，真机不可用，
     // 所以只按运行平台判断，绝不让真机走到这个分支（见 isDevtools 注释）。
-    localBackendInDevtools: true,
+    localBackendInDevtools: false,
     localApiBaseUrl: "http://127.0.0.1:3100",
     // 运行期数据：拍照识别草稿与最近一次排版结果，由页面写入、跨页读取。
     ocrDraft: null,

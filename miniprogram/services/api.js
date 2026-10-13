@@ -4,6 +4,7 @@
 
 /** 请求失败后重试前的等待，按重试次数递增（1.2s、2.4s…）。 */
 const RETRY_DELAY_MS = 1200;
+const session = require('./session');
 
 /**
  * 内联上传图片的体积上限。
@@ -55,18 +56,17 @@ function parseBody(data) {
   }
 }
 
-function httpRequest(options) {
+async function httpRequest(options) {
+  const base = getBaseUrl();
+  if (!base || base.includes("你的-api-域名")) throw new Error("请先在 app.js 配置后端地址");
+  const auth = !isLocalBackend(base) && options.path !== '/api/health' ? await session.token(base) : '';
   return new Promise((resolve, reject) => {
-    const baseUrl = getBaseUrl();
-    if (!baseUrl || baseUrl.includes("你的-api-域名")) {
-      reject(new Error("请先在 app.js 配置后端地址"));
-      return;
-    }
+    const baseUrl = base;
     wx.request({
       url: `${baseUrl}${options.path}`,
       method: options.method,
       data: options.data,
-      header: options.header,
+      header: { ...options.header, ...(auth ? { Authorization: 'Bearer ' + auth } : {}) },
       dataType: options.dataType,
       responseType: options.responseType,
       timeout: options.timeout,
@@ -107,6 +107,7 @@ async function requestWithRetry(options) {
     try {
       return await httpRequest(requestOptions);
     } catch (error) {
+      if (error.statusCode === 401 && attempt === 0 && !isLocalBackend(getBaseUrl())) { session.invalidate(getBaseUrl()); continue; }
       if (attempt >= retries || !isRetriable(error)) throw error;
       await wait(RETRY_DELAY_MS * (attempt + 1));
     }

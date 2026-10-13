@@ -1,4 +1,4 @@
-const HOME = 'pages/index/index';
+const navigation = require('../../../../shared/tool-navigation');
 Component({
   properties: { title: String },
   data: { statusHeight: 24, navHeight: 44 },
@@ -11,15 +11,7 @@ Component({
   },
   methods: {
     home() {
-      const pages = getCurrentPages();
-      const index = pages.findIndex(page => page.route === HOME);
-      const delta = pages.length - 1 - index;
-      if (index >= 0) {
-        pages[index].switchTool({ currentTarget: { dataset: { tool: 'claim' } } }, false);
-        if (delta > 0) wx.navigateBack({ delta });
-      } else {
-        wx.reLaunch({ url: '/' + HOME + '?tool=claim' });
-      }
+      navigation.returnToClaim();
     },
   },
 });

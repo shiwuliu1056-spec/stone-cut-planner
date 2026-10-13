@@ -1,4 +1,5 @@
-// 工具目录与三个工具的总览同页显隐；起诉助手详细操作仍按需打开分包。
+// 目录和工具复用主包页面代码，但每次进入工具都会压入原生页面栈。
+const navigation = require('../../shared/tool-navigation');
 const {
   defaultProject,
   loadProject,
@@ -93,8 +94,12 @@ function wait(ms) {
 
 Page({
   data: {
-    /** home 为工具目录；三个工具总览常驻并在同一页面内保留状态。 */
+    /** home 为工具目录；工具页通过 query 选择，只渲染当前工具。 */
     tool: "home",
+    navigationTitle: "宝松工具箱",
+    statusHeight: 24,
+    navHeight: 44,
+    navSideWidth: 100,
 
     /* ---- 石材下料 ---- */
     project: defaultProject(),
@@ -137,27 +142,48 @@ Page({
 
   onLoad(query) {
     this.pageDestroyed = false;
-    this.syncProject(loadProject());
     // 深链接：pages/index/index?tool=watermark 可直接落在去水印工具上。
     const requested = String((query && query.tool) || "");
-    const tool = Object.prototype.hasOwnProperty.call(TOOL_TITLES, requested) ? requested : "home";
-    if (tool !== this.data.tool) this.setData({ tool });
-    this.applyToolTitle(tool);
+    let tool = Object.prototype.hasOwnProperty.call(TOOL_TITLES, requested) ? requested : "home";
+    // 从分享/旧入口直接启动也先保留底层目录，再进入工具，避免侧滑退出。
+    if (tool !== 'home' && getCurrentPages().length === 1) {
+      this.pendingInitialTool = tool;
+      tool = 'home';
+    }
+    const patch = { ...this.setupNavigation(), tool, navigationTitle: TOOL_TITLES[tool] };
+    if (tool === 'cut') {
+      patch.project = loadProject();
+      patch.summary = projectSummary(patch.project);
+    }
+    if (tool === 'watermark') Object.assign(patch, navigation.restoreVideo());
+    this.setData(patch);
   },
 
-  onShow() {
-    this.applyToolTitle(this.data.tool);
-    // 只在页面重新可见时校准草稿（例如从拍照识别页返回后）。
-    // 工具切换不再触发 onShow，所以切换路径上没有任何 setData。
-    const stored = loadProject();
-    if (JSON.stringify(stored) !== JSON.stringify(this.data.project)) {
-      this.syncProject(stored);
+  onReady() {
+    if (this.pendingInitialTool) {
+      const tool = this.pendingInitialTool;
+      this.pendingInitialTool = '';
+      navigation.openTool(this, tool, false);
     }
   },
 
+  onShow() {
+    this.pageVisible = true;
+    this.openingTool = false;
+    this.applyToolTitle(this.data.tool);
+    // 只在页面重新可见时校准草稿（例如从拍照识别页返回后）。
+    // 首次已在onLoad读取，不重复进行同步存储和JSON比较。
+    if (this.shownBefore && this.data.tool === 'cut') {
+      const stored = loadProject();
+      if (JSON.stringify(stored) !== JSON.stringify(this.data.project)) this.syncProject(stored);
+    }
+    this.shownBefore = true;
+  },
+
   onUnload() {
+    navigation.rememberVideo(this.data);
+    this.pauseVideo();
     this.pageDestroyed = true;
-    if (this.toolNavigationTimer) clearTimeout(this.toolNavigationTimer);
     this.clearProgress();
     if (this.parseProgressTimer) clearInterval(this.parseProgressTimer);
     this.parseProgressTimer = null;
@@ -166,17 +192,28 @@ Page({
   /* ------------------------------------------------------------ 工具切换 */
 
   onHide() {
-    if (this.toolNavigationTimer) clearTimeout(this.toolNavigationTimer);
+    this.pageVisible = false;
+    navigation.rememberVideo(this.data);
     this.pauseVideo();
   },
 
   openTool(event) {
     const tool = String((event.detail && event.detail.tool) || "");
-    this.switchTool({ currentTarget: { dataset: { tool } } });
+    navigation.openTool(this, tool);
   },
 
   backToToolbox() {
-    this.switchTool({ currentTarget: { dataset: { tool: "home" } } }, false);
+    navigation.returnToToolbox();
+  },
+
+  setupNavigation() {
+    try {
+      const info = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      const capsule = wx.getMenuButtonBoundingClientRect();
+      const statusHeight = info.statusBarHeight || 24;
+      return { statusHeight, navHeight: Math.max(44, capsule.height + 2 * (capsule.top - statusHeight)), navSideWidth: Math.max(88, info.windowWidth - capsule.left + 8) };
+    } catch (_) { /* 不支持窗口测量时保留安全默认值。 */ }
+    return {};
   },
 
   pauseVideo() {
@@ -185,33 +222,17 @@ Page({
     }
   },
 
-  switchTool(event, vibrate = true) {
-    const tool = String(event.currentTarget.dataset.tool || "");
-    if (!Object.prototype.hasOwnProperty.call(TOOL_TITLES, tool) || tool === this.data.tool) return;
-    // 两个工具用 hidden 常驻，video 组件不会被销毁：切走时若不手动暂停，
-    // 视频的音频会继续播。
-    this.pauseVideo();
-    // 只切 hidden，不换 webview、不重建 DOM —— 这是消除切换白帧的关键。
-    // 这一步决定可见内容，让它单独占住这一轮，先把渲染发出去。
-    this.setData({ tool });
-    // 标题、滚动复位、震动都在非关键路径上，统一挪到下一个 tick：
-    // 它们每个都要过一次 JS↔原生桥，和上面那次渲染抢主线程只会拉长
-    // 「按下 → 画面响应」的间隔。
-    if (this.toolNavigationTimer) clearTimeout(this.toolNavigationTimer);
-    this.toolNavigationTimer = setTimeout(() => {
-      if (this.pageDestroyed || this.data.tool !== tool) return;
-      this.applyToolTitle(tool);
-      wx.pageScrollTo({ scrollTop: 0, duration: 0 });
-      if (vibrate) wx.vibrateShort({ type: "light", fail: () => {} });
-    }, 0);
-  },
-
   /** 同步原生导航栏标题（原本由各页 json 的 navigationBarTitleText 提供）*/
   applyToolTitle(tool) {
-    wx.setNavigationBarTitle({
-      title: TOOL_TITLES[tool] || TOOL_TITLES.home,
-      fail: () => {},
-    });
+    const navigationTitle = TOOL_TITLES[tool] || TOOL_TITLES.home;
+    if (this.data.navigationTitle !== navigationTitle) this.setData({ navigationTitle });
+    // 可见标题由同一首屏patch渲染；原生元信息不占首屏关键路径。
+    const update = () => {
+      if (!this.pageDestroyed && this.pageVisible && this.data.tool === tool)
+        wx.setNavigationBarTitle({ title: navigationTitle, fail: () => {} });
+    };
+    if (typeof wx.nextTick === 'function') wx.nextTick(update);
+    else update();
   },
 
   /* ============================================================ 石材下料 */
@@ -513,7 +534,7 @@ Page({
             parts: result.parts,
           };
           if (!(await this.completeProgress(progressToken))) return;
-          wx.navigateTo({ url: "/pages/ocr-review/ocr-review" });
+          wx.navigateTo({url:"/pages/ocr-review/ocr-review"});
         } catch (error) {
           this.clearProgress(progressToken);
           if (!this.pageDestroyed)
@@ -587,7 +608,7 @@ Page({
         throw new Error("排版服务返回结果为空");
       getApp().globalData.latestResult = response.result;
       if (!(await this.completeProgress(progressToken))) return;
-      wx.navigateTo({ url: "/pages/result/result" });
+      wx.navigateTo({url:"/pages/result/result"});
     } catch (error) {
       this.clearProgress(progressToken);
       if (!this.pageDestroyed)

@@ -4,176 +4,128 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '../..');
-const tick = () => new Promise(resolve => setTimeout(resolve, 10));
+const read = file => fs.readFileSync(path.join(root, 'miniprogram', file), 'utf8');
 
-function loadHome(query = {}) {
-  const source = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.js'), 'utf8');
-  let definition;
-  let stored = { slabs: [{ id: 'A', w: 2000, h: 1000, limit: null }], parts: [{ id: 'p', w: 500, h: 500, qty: 1 }] };
-  const calls = { titles: [], vibrations: [], navigation: [], pauses: 0, toasts: [] };
-  vm.runInNewContext(source, {
-    Page: value => { definition = value; }, setTimeout, clearTimeout, clearInterval,
-    require: name => name.includes('utils/project') ? {
-      defaultProject: () => structuredClone(stored), loadProject: () => structuredClone(stored),
-      saveProject: project => { stored = structuredClone(project); }, projectSummary: () => ({ totalCount: 1, totalArea: '0.250' }),
-    } : name.includes('utils/errors') ? { userMessage: error => error.message } : {},
-    wx: {
-      setNavigationBarTitle: options => calls.titles.push(options.title), pageScrollTo() {},
-      vibrateShort: options => calls.vibrations.push(options.type),
-      navigateTo: options => calls.navigation.push(options), showToast: options => calls.toasts.push(options.title),
-      createVideoContext: () => ({ pause: () => { calls.pauses++; } }),
+function harness() {
+  let definition, navigation;
+  const pages = [], calls = { vibrations: [], urls: [], pauses: 0, titles: [], redirects: [] };
+  let stored = { slabs: [{ id:'A', w:2000, h:1000, limit:null }], parts:[{id:'p',w:500,h:500,qty:1}] };
+  let failNext = false;
+  const wx = {
+    setNavigationBarTitle: o => calls.titles.push(o.title),
+    vibrateShort: o => calls.vibrations.push(o.type), showToast() {},
+    createVideoContext: () => ({pause() { calls.pauses++; }}),
+    navigateTo(o) {
+      calls.urls.push(o.url);
+      if (failNext) { failNext=false; o.fail(); return; }
+      const previous=pages.at(-1); if(previous.onHide) previous.onHide();
+      create({tool:o.url.split('?tool=')[1]}); if(o.success)o.success();
     },
-  }, { filename: 'miniprogram/pages/index/index.js' });
-  const page = Object.assign({}, definition, { data: structuredClone(definition.data), setData(values) { Object.assign(this.data, values); } });
-  page.onLoad(query);
-  return { page, calls };
+    navigateBack(o) { for(let i=0;i<o.delta;i++){const p=pages.pop();if(p.onUnload)p.onUnload();}const p=pages.at(-1);if(p.onShow)p.onShow(); },
+    reLaunch(o) { while(pages.length){const p=pages.pop();if(p.onUnload)p.onUnload();}create({tool:o.url.split('?tool=')[1]}); },
+    redirectTo(o) { calls.redirects.push(o.url); pages.pop(); create({tool:o.url.split('?tool=')[1]}); },
+  };
+  const navContext = {module:{exports:{}},wx,getCurrentPages:()=>pages};
+  vm.runInNewContext(read('shared/tool-navigation.js'),navContext); navigation=navContext.module.exports;
+  vm.runInNewContext(read('pages/index/index.js'), {
+    Page:d=>definition=d, getCurrentPages:()=>pages, wx, setTimeout,clearTimeout,clearInterval,
+    require: name => name.includes('tool-navigation') ? navigation : name.includes('utils/project') ? {
+      defaultProject:()=>structuredClone(stored),loadProject:()=>structuredClone(stored),
+      saveProject:p=>{stored=structuredClone(p);return p;},projectSummary:()=>({totalCount:1,totalArea:'0.250'}),
+    } : name.includes('utils/errors') ? {userMessage:e=>e.message} : {},
+  });
+  function create(query={}) {
+    const p={...definition,route:'pages/index/index',data:structuredClone(definition.data),setData(patch){Object.assign(this.data,patch);}};
+    pages.push(p);p.onLoad(query);p.onShow();p.onReady();return p;
+  }
+  return {create,pages,calls,navigation,wx,failNext:()=>{failNext=true;}};
 }
-const entry = tool => ({ detail: { tool } });
+const enter=(p,tool)=>p.openTool({detail:{tool}});
 
-test('普通启动展示工具目录；旧工具深链接仍可进入', () => {
-  for (const [query, expected] of [[{}, 'home'], [{ tool: 'cut' }, 'cut'], [{ tool: 'watermark' }, 'watermark'], [{ tool: 'claim' }, 'claim'], [{ tool: 'unknown' }, 'home']]) {
-    const { page } = loadHome(query);
-    assert.equal(page.data.tool, expected);
-    page.onUnload();
+test('三个工具分别压入原生页面栈，系统返回目的地是未改变的目录',()=>{
+  const h=harness(),home=h.create();
+  for(const tool of ['cut','watermark','claim']) {
+    enter(home,tool);assert.equal(h.pages.length,2);assert.equal(h.pages[0],home);
+    assert.equal(home.data.tool,'home');assert.equal(h.pages[1].data.tool,tool);
+    // 模拟宿主侧滑完成后的原生出栈，而不是模拟业务触摸回调。
+    h.wx.navigateBack({delta:1});assert.equal(h.pages.length,1);assert.equal(h.pages[0].data.tool,'home');
+  }
+  assert.deepEqual(h.calls.vibrations,['light','light','light']);
+});
+test('顶部折返箭头使用原生出栈，多层工具也回到真正目录',()=>{
+  const h=harness(),home=h.create();enter(home,'cut');
+  const cut=h.pages.at(-1);h.pages.push({route:'other',data:{}});
+  cut.backToToolbox();assert.equal(h.pages.length,1);assert.equal(h.pages[0],home);
+});
+test('分享或旧链接直接启动三个工具也保留底层目录，无额外震动',()=>{
+  for(const tool of ['cut','watermark','claim']){
+    const h=harness();h.create({tool});
+    assert.equal(h.pages.length,2);assert.equal(h.pages[0].data.tool,'home');assert.equal(h.pages[1].data.tool,tool);
+    assert.equal(h.calls.vibrations.length,0);
   }
 });
-
-test('两个工具通过首页打开，资料和解析结果保留，每次有效进入只轻震动一次', async () => {
-  const { page, calls } = loadHome();
-  page.openTool(entry('cut')); await tick();
-  const project = page.data.project;
-  page.backToToolbox(); await tick();
-  page.openTool(entry('watermark')); await tick();
-  page.setData({ link: '测试分享链接', transcript: '测试文案', result: { title: '测试视频' }, videoUrl: 'local-video' });
-  page.backToToolbox(); await tick();
-  assert.equal(calls.pauses, 1);
-  page.openTool(entry('cut')); await tick();
-  assert.equal(page.data.project, project);
-  page.backToToolbox(); await tick();
-  page.openTool(entry('watermark')); await tick();
-  assert.equal(page.data.link, '测试分享链接');
-  assert.equal(page.data.transcript, '测试文案');
-  assert.equal(page.data.result.title, '测试视频');
-  assert.deepEqual(calls.vibrations, ['light', 'light', 'light', 'light']);
-  assert.equal(calls.navigation.length, 0);
-  page.onHide(); assert.equal(calls.pauses, 2);
-  page.onUnload();
+test('快速重复点击不叠加页面，返回后可再次进入；失败后可重试',()=>{
+  const h=harness(),home=h.create();enter(home,'cut');enter(home,'cut');assert.equal(h.pages.length,2);
+  h.wx.navigateBack({delta:1});enter(home,'claim');assert.equal(h.pages.length,2);
+  h.wx.navigateBack({delta:1});h.failNext();enter(home,'watermark');assert.equal(h.pages.length,1);
+  enter(home,'watermark');assert.equal(h.pages.length,2);
+  const count=h.calls.urls.length;enter(home,'unknown');assert.equal(h.calls.urls.length,count);
 });
-
-test('起诉总览和其他入口同页显隐，多次进入不新建页面，重复点击不叠加震动', async () => {
-  const { page, calls } = loadHome();
-  page.openTool(entry('claim')); page.openTool(entry('claim'));
-  await tick();
-  assert.equal(calls.navigation.length, 0);
-  assert.equal(page.data.tool, 'claim');
-  assert.deepEqual(calls.vibrations, ['light']);
-  assert.equal(calls.titles.at(-1), '起诉助手');
-  page.backToToolbox(); await tick();
-  assert.equal(page.data.tool, 'home');
-  page.openTool(entry('claim')); await tick();
-  assert.equal(calls.navigation.length, 0);
-  assert.equal(page.data.tool, 'claim');
-  assert.deepEqual(calls.vibrations, ['light', 'light']);
-  assert.equal(calls.toasts.length, 0);
-  page.onUnload();
+test('视频输入与结果跨出栈保留，忙碌和进度状态不带入新页面',()=>{
+  const h=harness(),home=h.create();enter(home,'watermark');
+  h.pages.at(-1).setData({link:'测试链接',transcript:'测试文案',result:{title:'视频'},videoUrl:'local-video',parsing:true,videoProgressTask:'parse'});
+  h.wx.navigateBack({delta:1});enter(home,'watermark');const data=h.pages.at(-1).data;
+  assert.equal(data.link,'测试链接');assert.equal(data.transcript,'测试文案');assert.equal(data.result.title,'视频');
+  assert.equal(data.parsing,false);assert.equal(data.videoProgressTask,'');assert.ok(h.calls.pauses>=1);
 });
-
-test('无效入口不切换；快速返回或卸载不写入过时导航标题', async () => {
-  const { page, calls } = loadHome();
-  page.openTool(entry('unknown')); assert.equal(page.data.tool, 'home');
-  page.openTool(entry('cut')); page.backToToolbox(); await tick();
-  assert.equal(calls.titles.at(-1), '宝松工具箱');
-  assert.equal(calls.vibrations.length, 0);
-  page.openTool(entry('watermark')); page.onUnload(); await tick();
-  assert.equal(calls.titles.at(-1), '宝松工具箱');
+test('石材尺寸从原草稿恢复，导航不清空资料',()=>{
+  const h=harness(),home=h.create();enter(home,'cut');
+  h.pages.at(-1).persist({slabs:[{id:'A',w:2600,h:1800,limit:null}],parts:[]});
+  h.wx.navigateBack({delta:1});enter(home,'cut');assert.equal(h.pages.at(-1).data.project.slabs[0].w,2600);
 });
-
-test('资料页首页按钮返回主页面案件总览；直接进入资料页也有正确兜底', () => {
-  let component;
-  const selections = [];
-  let pages = [{ route: 'pages/index/index', switchTool: (event, vibrate) => selections.push([event.currentTarget.dataset.tool, vibrate]) }, { route: 'packages/claim/pages/review/index' }, { route: 'packages/claim/pages/evidence/index' }];
-  const back = [], launches = [];
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/packages/claim/components/home-nav/index.js'), 'utf8'), {
-    Component: value => { component = value; }, getCurrentPages: () => pages,
-    wx: { navigateBack: options => back.push(options.delta), reLaunch: options => launches.push(options.url) },
-  });
-  component.methods.home(); assert.deepEqual(back, [2]); assert.equal(launches.length, 0);
-  assert.deepEqual(selections, [['claim', false]]);
-  pages = [{ route: 'packages/claim/pages/evidence/index' }]; component.methods.home();
-  assert.deepEqual(launches, ['/pages/index/index?tool=claim']);
+test('资料页和旧入口优先返回上层起诉总览，不误选底层目录',()=>{
+  const h=harness(),home=h.create();enter(home,'claim');const claim=h.pages.at(-1);
+  h.pages.push({route:'packages/claim/pages/complaint/index',data:{}});
+  h.pages.push({route:'packages/claim/pages/evidence/index',data:{}});
+  h.navigation.returnToClaim();assert.equal(h.pages.length,2);assert.equal(h.pages.at(-1),claim);assert.equal(home.data.tool,'home');
+  h.wx.navigateBack({delta:1});h.pages.push({route:'packages/claim/pages/home/index',data:{}});
+  h.navigation.returnToClaim();assert.equal(h.pages.length,2);assert.equal(h.pages[0],home);assert.equal(h.pages[1].data.tool,'claim');
+  assert.deepEqual(h.calls.redirects,['/pages/index/index?tool=claim']);
 });
-
-test('旧分包总览链接兼容跳回主页面起诉总览，不创建重复业务实例', () => {
-  let definition;
-  let returned = 0;
-  let pages = [{ route: 'pages/index/index', switchTool: (event, vibrate) => { assert.equal(event.currentTarget.dataset.tool, 'claim'); assert.equal(vibrate, false); returned++; } }, { route: 'packages/claim/pages/home/index' }];
-  const back = [], launches = [];
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/packages/claim/pages/home/index.js'), 'utf8'), {
-    Page: value => { definition = value; }, require: () => ({}), getCurrentPages: () => pages,
-    wx: { navigateBack: options => back.push(options.delta), reLaunch: options => launches.push(options.url) },
-  });
-  definition.onLoad(); assert.equal(returned, 1); assert.deepEqual(back, [1]);
-  pages = [{ route: 'packages/claim/pages/home/index' }]; definition.onLoad();
-  assert.deepEqual(launches, ['/pages/index/index?tool=claim']);
+test('无总览的深链接资料页返回时重建目录与起诉总览两层',()=>{
+  const h=harness();h.pages.push({route:'packages/claim/pages/complaint/index',data:{}});
+  h.navigation.returnToClaim();assert.equal(h.pages.length,2);assert.equal(h.pages[0].data.tool,'home');assert.equal(h.pages[1].data.tool,'claim');
 });
-
-test('起诉总览组件在启动时预备，重新显示和从填写页返回会刷新资料，返回仅派发事件', () => {
-  let definition;
-  let refreshes = 0;
-  const events = [];
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/components/claim-home/index.js'), 'utf8'), {
-    Component: value => { definition = value; },
-    require: () => ({ data: {}, methods: { refresh() { refreshes++; } } }),
-  });
-  const component = { properties: { active: false }, refresh: definition.methods.refresh, triggerEvent: event => events.push(event) };
-  definition.lifetimes.attached.call(component); assert.equal(refreshes, 1);
-  definition.observers.active.call(component, false); assert.equal(refreshes, 1);
-  definition.observers.active.call(component, true); assert.equal(refreshes, 2);
-  definition.pageLifetimes.show.call(component); assert.equal(refreshes, 2);
-  component.properties.active = true; definition.pageLifetimes.show.call(component); assert.equal(refreshes, 3);
-  definition.methods.backToToolbox.call(component); assert.deepEqual(events, ['back']);
-  const wxml = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
-  const tag = wxml.match(/<claim-home[^>]*>/)[0];
-  assert.doesNotMatch(tag, /wx:if/);
-  assert.match(wxml, /<view class="claim-page" hidden="\{\{tool !== 'claim'\}\}">/);
+test('填写资料直接navigateTo，过程中不操作目录或返回容器',()=>{
+  const urls=[],context={module:{exports:{}},require:()=>({pagePath:()=>'/packages/claim/pages/complaint/index'}),wx:{navigateTo:o=>urls.push(o.url)}};
+  vm.runInNewContext(read('shared/claim/home.js'),context);context.module.exports.methods.continueCase();
+  assert.deepEqual(urls,['/packages/claim/pages/complaint/index']);
+  assert.doesNotMatch(read('shared/claim/home.js'),/switchTool|reLaunch|navigateBack|page-container/);
 });
-
-test('起诉总览对未变化的案件复用进度，编辑、换案件或返回前台时重新检查', () => {
-  let checks = 0;
-  let completion = 50;
-  const current = { caseId: 'case-1', revision: 0 };
-  const context = { module: { exports: {} }, require: () => ({ get: () => current, progressSummary: () => { checks++; return { completion, columns: [completion, 0, 0, 0, 0] }; } }) };
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/shared/claim/home.js'), 'utf8'), context);
-  const overview = context.module.exports;
-  let patches = 0;
-  const component = { ...overview.methods, data: structuredClone(overview.data), setData(patch) { patches++; Object.assign(this.data, patch); } };
-  component.refresh(); component.refresh(); component.refresh();
-  assert.equal(checks, 1); assert.equal(patches, 1);
-  current.revision++; component.refresh(); assert.equal(checks, 2);
-  current.caseId = 'case-2'; component.refresh(); assert.equal(checks, 3);
-  completion = 0; component.refresh(true); assert.equal(checks, 4); assert.equal(component.data.completion, 0);
-});
-
-test('主页面隐藏时取消延迟标题更新；从资料页返回恢复当前工具标题', async () => {
-  const { page, calls } = loadHome();
-  page.openTool(entry('claim')); page.onHide(); await tick();
-  assert.equal(calls.titles.at(-1), '宝松工具箱');
-  page.onShow(); assert.equal(calls.titles.at(-1), '起诉助手');
-  page.onUnload();
-});
-
-test('目录组件三个入口均派发同一种选择事件，使用即刻按压反馈且无底部栏', () => {
-  let definition;
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/components/toolbox-home/index.js'), 'utf8'), { Component: value => { definition = value; } });
-  assert.deepEqual(Array.from(definition.data.tools, tool => tool.id), ['cut', 'watermark', 'claim']);
-  const events = [];
-  for (const tool of definition.data.tools) {
-    definition.methods.selectTool.call({ triggerEvent: (type, data) => events.push([type, data.tool]) }, { currentTarget: { dataset: { tool: tool.id } } });
-    assert.ok(fs.existsSync(path.join(root, 'miniprogram', tool.image)));
+test('正文在固定导航之外，不拦截触摸，非选中工具不创建复杂DOM',()=>{
+  const wxml=read('pages/index/index.wxml');
+  assert.doesNotMatch(wxml,/page-container|touchstart|touchmove|touchend|touchcancel/);
+  assert.doesNotMatch(read('pages/index/index.js'),/onToolTouch|switchTool|pageScrollTo/);
+  assert.match(wxml,/class="page-shell index-page" wx:if="\{\{tool === 'cut'\}\}"/);
+  assert.match(wxml,/class="page-shell watermark-page" wx:if="\{\{tool === 'watermark'\}\}"/);
+  assert.match(wxml,/src="\/assets\/return.svg"/);
+  let depth=0,bodyDepth;
+  for(const match of wxml.matchAll(/<\/?view\b(?:[^"'>]|"[^"]*"|'[^']*')*>|<toolbox-home/g)){
+    if(match[0]==='<toolbox-home'){bodyDepth=depth;continue;}
+    depth+=match[0].startsWith('</')?-1:match[0].endsWith('/>')?0:1;assert.ok(depth>=0);
   }
-  assert.deepEqual(events, [['toolselect', 'cut'], ['toolselect', 'watermark'], ['toolselect', 'claim']]);
-  const home = fs.readFileSync(path.join(root, 'miniprogram/components/toolbox-home/index.wxml'), 'utf8');
-  assert.match(home, /hover-start-time="0"/); assert.match(home, /拥抱AI/);
-  assert.doesNotMatch(home, /tool-category|entry-arrow/);
-  assert.doesNotMatch(fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8'), /class="tab-bar"/);
+  assert.equal(bodyDepth,1);assert.equal(depth,0);
+  assert.match(read('pages/index/index.wxss'),/\.tool-nav\s*\{[^}]*position:fixed;/);
+});
+test('旧分包入口及资料页首页按钮都委托原生导航辅助函数',()=>{
+  for(const file of ['packages/claim/pages/home/index.js','packages/claim/components/home-nav/index.js']) {
+    assert.match(read(file),/navigation.returnToClaim\(\)/);assert.doesNotMatch(read(file),/switchTool|findIndex/);
+  }
+});
+test('未变化的起诉资料复用进度检查，回前台仍刷新',()=>{
+  let checks=0;const current={caseId:'case-1',revision:0};
+  const context={module:{exports:{}},require:()=>({get:()=>current,progressSummary:()=>{checks++;return {completion:50,columns:[50,0,0,0,0]};}})};
+  vm.runInNewContext(read('shared/claim/home.js'),context);const def=context.module.exports;
+  const c={...def.methods,data:structuredClone(def.data),setData(p){Object.assign(this.data,p);}};
+  c.refresh();c.refresh();assert.equal(checks,1);current.revision++;c.refresh();assert.equal(checks,2);
 });

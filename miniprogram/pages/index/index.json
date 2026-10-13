@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "宝松工具箱",
+  "navigationStyle": "custom",
   "usingComponents": {
     "toolbox-home": "/components/toolbox-home/index",
     "claim-home": "/components/claim-home/index"
