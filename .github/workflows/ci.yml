@@ -9,7 +9,8 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -18,12 +19,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: |
+            backend/package-lock.json
+            claim-backend/package-lock.json
 
-      - name: Install backend dependencies
-        run: npm --prefix backend ci
+      - name: Install toolbox dependencies
+        run: |
+          npm --prefix backend ci
+          npm --prefix claim-backend ci
 
-      - name: Run backend tests
+      - name: Install Chromium and browser dependencies
+        working-directory: claim-backend
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Word rendering dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libreoffice-writer fonts-noto-cjk
+
+      - name: Run all toolbox tests
         run: npm test

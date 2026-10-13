@@ -13,7 +13,7 @@ const LOCAL_BASE_URL = "http://127.0.0.1:3100";
  * 沙箱故意不提供 wx.cloud：app.js 已经彻底脱离云开发，一旦有人把 wx.cloud 写回来，
  * 这里会直接抛错而不是悄悄通过。
  */
-function loadMiniProgramApp(platform, envVersion = "develop") {
+function loadMiniProgramApp(platform, envVersion = "develop", localBackendInDevtools) {
   const source = fs.readFileSync(
     path.join(__dirname, "../../miniprogram/app.js"),
     "utf8",
@@ -37,12 +37,21 @@ function loadMiniProgramApp(platform, envVersion = "develop") {
     },
   };
   vm.runInNewContext(source, context, { filename: "miniprogram/app.js" });
+  if (localBackendInDevtools !== undefined) app.globalData.localBackendInDevtools = localBackendInDevtools;
   app.onLaunch();
   return { app, calls };
 }
 
-test("开发者工具启动时指向本机后端，并预热一次", () => {
+test("开发者工具默认启动时指向云服务器，并预热一次", () => {
   const { app, calls } = loadMiniProgramApp("devtools");
+  assert.equal(app.globalData.localBackendInDevtools, false);
+  assert.equal(app.globalData.apiBaseUrl, PRODUCTION_BASE_URL);
+  assert.equal(app.globalData.localApiBaseUrl, LOCAL_BASE_URL);
+  assert.equal(calls.warmUp, 1);
+});
+
+test("显式启用本地开发后，开发者工具指向本机后端", () => {
+  const { app, calls } = loadMiniProgramApp("devtools", "develop", true);
   assert.equal(app.globalData.localBackendInDevtools, true);
   assert.equal(app.globalData.apiBaseUrl, LOCAL_BASE_URL);
   assert.equal(calls.warmUp, 1);
@@ -57,7 +66,7 @@ for (const [platform, envVersion] of [
   ["ios", "release"],
 ]) {
   test(`真机（${platform}, envVersion=${envVersion}）走线上 HTTPS 域名`, () => {
-    const { app, calls } = loadMiniProgramApp(platform, envVersion);
+    const { app, calls } = loadMiniProgramApp(platform, envVersion, true);
     assert.equal(app.globalData.apiBaseUrl, PRODUCTION_BASE_URL);
     assert.equal(calls.warmUp, 1);
   });
